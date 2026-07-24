@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f6f2">
+  <title>SKU 经营训练模拟器</title>
+  <style>
+    :root {
+      --bg: #f5f6f2;
+      --surface: #ffffff;
+      --surface-2: #eef1ea;
+      --ink: #18201d;
+      --muted: #66706b;
+      --line: #dce1da;
+      --green: #177957;
+      --green-soft: #dff1e8;
+      --blue: #246bce;
+      --blue-soft: #e4eefc;
+      --amber: #b56a09;
+      --amber-soft: #fff0d6;
+      --red: #b83c34;
+      --red-soft: #fae5e2;
+      --purple: #7357a8;
+      --purple-soft: #eee9f7;
+      --shadow: 0 10px 32px rgba(29, 39, 35, 0.07);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    .app {
+      min-height: 100vh;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(245, 246, 242, 0.95);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(12px);
+    }
+
+    .header-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      min-height: 64px;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      color: white;
+      background: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      flex: none;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-btn, .secondary-btn, .primary-btn, .preset-btn, .action-btn {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      min-height: 38px;
+      background: var(--surface);
+      color: var(--ink);
+      transition: 160ms ease;
+    }
+
+    .icon-btn {
+      width: 38px;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+    }
+
+    .icon-btn:hover, .secondary-btn:hover, .preset-btn:hover, .action-btn:hover {
+      border-color: #aeb7b1;
+      transform: translateY(-1px);
+    }
+
+    .primary-btn {
+      padding: 0 16px;
+      background: var(--ink);
+      border-color: var(--ink);
+      color: white;
+      font-weight: 700;
+    }
+
+    .primary-btn:hover { background: #2a3631; }
+
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 24px;
+      padding: 10px 0 22px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 9px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 22px;
+      height: 2px;
+      background: var(--green);
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(29px, 4vw, 48px);
+      line-height: 1.08;
+      font-weight: 780;
+    }
+
+    .intro p {
+      margin: 12px 0 0;
+      color: var(--muted);
+      max-width: 720px;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .mission {
+      width: 280px;
+      padding: 13px 15px;
+      border-left: 3px solid var(--green);
+      background: var(--surface-2);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .mission strong { display: block; margin-bottom: 3px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .controls {
+      position: sticky;
+      top: 82px;
+      max-height: calc(100vh - 104px);
+      overflow: auto;
+    }
+
+    .panel-head {
+      padding: 17px 18px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .panel-head h2, .section-title h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.3;
+    }
+
+    .panel-head p, .section-title p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .step {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      color: white;
+      background: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+      flex: none;
+    }
+
+    .preset-row {
+      padding: 12px 18px 4px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .preset-btn {
+      padding: 7px 5px;
+      min-height: 34px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .preset-btn.active {
+      color: var(--green);
+      border-color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .control-group {
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .control-group:last-child { border-bottom: 0; }
+
+    .group-label {
+      margin-bottom: 11px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+
+    .field-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px;
+    }
+
+    .field-top label {
+      font-size: 13px;
+      font-weight: 680;
+    }
+
+    .field-value {
+      color: var(--green);
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .field-note {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--green);
+    }
+
+    .number-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .number-box {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 10px;
+      background: #fbfcfa;
+    }
+
+    .number-box label {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      margin-bottom: 3px;
+    }
+
+    .number-box input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--ink);
+      font-weight: 720;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .content {
+      min-width: 0;
+      display: grid;
+      gap: 18px;
+    }
+
+    .status-strip {
+      display: grid;
+      grid-template-columns: minmax(210px, 1.2fr) repeat(4, minmax(110px, 1fr));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .verdict {
+      padding: 17px 18px;
+      color: white;
+      background: var(--green);
+      min-height: 108px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .verdict.warn { background: var(--amber); }
+    .verdict.danger { background: var(--red); }
+
+    .verdict span {
+      font-size: 11px;
+      font-weight: 800;
+      opacity: 0.8;
+      text-transform: uppercase;
+    }
+
+    .verdict strong {
+      margin-top: 4px;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+
+    .verdict small {
+      margin-top: 7px;
+      line-height: 1.4;
+      opacity: 0.9;
+    }
+
+    .metric {
+      min-height: 108px;
+      padding: 16px;
+      border-left: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .metric strong {
+      margin-top: 6px;
+      font-size: 22px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric small {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .section {
+      padding: 18px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 17px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .timeline-wrap {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .timeline {
+      min-width: 720px;
+      height: 182px;
+      position: relative;
+      padding: 0 26px;
+    }
+
+    .track {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      top: 82px;
+      height: 10px;
+      border-radius: 5px;
+      background: var(--surface-2);
+      overflow: hidden;
+    }
+
+    .track-fill {
+      height: 100%;
+      background: var(--green);
+      transition: width 420ms ease;
+    }
+
+    .risk-band, .safety-band, .promo-band {
+      position: absolute;
+      height: 10px;
+      top: 82px;
+      transition: left 420ms ease, width 420ms ease;
+      pointer-events: none;
+    }
+
+    .risk-band { background: var(--red); }
+    .safety-band { background: var(--blue); opacity: 0.82; }
+    .promo-band {
+      top: 103px;
+      height: 5px;
+      background: var(--purple);
+      border-radius: 3px;
+    }
+
+    .node {
+      position: absolute;
+      top: 56px;
+      width: 2px;
+      height: 64px;
+      background: var(--ink);
+      transition: left 420ms ease;
+    }
+
+    .node::before {
+      content: "";
+      position: absolute;
+      top: 23px;
+      left: -4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid currentColor;
+    }
+
+    .node-label {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 114px;
+      text-align: center;
+      color: var(--ink);
+      font-size: 10px;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+
+    .node-label.top { bottom: 69px; }
+    .node-label.bottom { top: 69px; }
+    .node-label b { display: block; font-size: 12px; }
+
+    .ticks {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      top: 133px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .formula {
+      margin-top: 3px;
+      padding: 12px 14px;
+      background: var(--surface-2);
+      display: grid;
+      grid-template-columns: repeat(5, auto);
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .formula strong { color: var(--ink); }
+    .formula .operator { color: #99a29d; font-size: 16px; }
+
+    .chart-wrap {
+      width: 100%;
+      min-height: 270px;
+      position: relative;
+    }
+
+    #inventoryChart {
+      width: 100%;
+      height: 270px;
+      display: block;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      display: none;
+      pointer-events: none;
+      transform: translate(-50%, calc(-100% - 10px));
+      padding: 7px 9px;
+      border-radius: 6px;
+      color: white;
+      background: var(--ink);
+      font-size: 11px;
+      white-space: nowrap;
+      z-index: 4;
+    }
+
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .assessment {
+      padding: 18px;
+      min-height: 100%;
+    }
+
+    .assessment h3 {
+      margin: 0 0 12px;
+      font-size: 14px;
+    }
+
+    .assessment-list {
+      display: grid;
+      gap: 9px;
+    }
+
+    .assessment-item {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 10px;
+      align-items: start;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 3px 7px;
+      border-radius: 5px;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .tag.good { color: var(--green); background: var(--green-soft); }
+    .tag.warn { color: var(--amber); background: var(--amber-soft); }
+    .tag.bad { color: var(--red); background: var(--red-soft); }
+    .tag.info { color: var(--blue); background: var(--blue-soft); }
+
+    .decision-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .action-btn {
+      padding: 9px 10px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .action-btn small {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .learning-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-top: 1px solid var(--line);
+    }
+
+    .learning {
+      padding: 15px 17px;
+      border-right: 1px solid var(--line);
+    }
+
+    .learning:last-child { border-right: 0; }
+
+    .learning b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+    }
+
+    .learning p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .mobile-run {
+      display: none;
+      position: fixed;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      z-index: 30;
+      min-height: 48px;
+      border: 0;
+      border-radius: 7px;
+      color: white;
+      background: var(--ink);
+      box-shadow: 0 8px 28px rgba(24, 32, 29, 0.22);
+      font-weight: 800;
+    }
+
+    @media (max-width: 1100px) {
+      .status-strip { grid-template-columns: 1.4fr repeat(2, 1fr); }
+      .metric:nth-of-type(3), .metric:nth-of-type(4) { border-top: 1px solid var(--line); }
+      .verdict { grid-row: span 2; }
+    }
+
+    @media (max-width: 860px) {
+      main { padding: 18px 14px 86px; }
+      .header-inner { padding: 9px 14px; }
+      .intro { grid-template-columns: 1fr; padding-top: 5px; }
+      .mission { width: auto; }
+      .layout { grid-template-columns: 1fr; }
+      .controls { position: static; max-height: none; }
+      .analysis-grid { grid-template-columns: 1fr; }
+      .mobile-run { display: block; }
+      .desktop-run { display: none; }
+    }
+
+    @media (max-width: 620px) {
+      h1 { font-size: 31px; }
+      .brand span { display: none; }
+      .header-actions .secondary-btn { display: none; }
+      .status-strip { grid-template-columns: 1fr 1fr; }
+      .verdict { grid-column: span 2; grid-row: auto; min-height: 96px; }
+      .metric { border-top: 1px solid var(--line); min-height: 92px; }
+      .metric:nth-child(even) { border-left: 0; }
+      .metric strong { font-size: 20px; }
+      .section, .assessment { padding: 15px; }
+      .section-title { align-items: flex-start; flex-direction: column; }
+      .formula {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        text-align: left;
+      }
+      .formula .operator { display: none; }
+      .learning-strip { grid-template-columns: 1fr; }
+      .learning { border-right: 0; border-bottom: 1px solid var(--line); }
+      .learning:last-child { border-bottom: 0; }
+      .decision-actions { grid-template-columns: 1fr; }
+      .number-inputs { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="header-inner">
+        <div class="brand">
+          <div class="brand-mark">SKU</div>
+          <div>
+            <strong>经营训练模拟器</strong>
+            <span>Forecast · Lead Time · Safety Stock</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="secondary-btn" id="resetBtn" style="padding:0 12px">恢复默认</button>
+          <button class="icon-btn" id="helpBtn" title="查看学习目标" aria-label="查看学习目标">?</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div>
+          <div class="eyebrow">运营沙盘 · 教学关</div>
+          <h1>你现在下单，<br>还来得及接住未来需求吗？</h1>
+          <p>调整 Forecast、全流程 Lead Time、安全库存和补货量。模型会逐日模拟未来 180 天，告诉你旧货何时卖完、新货何时可售，以及经营动作会造成缺货还是积压。</p>
+        </div>
+        <div class="mission">
+          <strong>本关目标</strong>
+          在不发生严重断货、不过度积压的前提下，提高可持续 GMV 与贡献利润。
+        </div>
+      </section>
+
+      <div class="layout">
+        <aside class="panel controls">
+          <div class="panel-head">
+            <div>
+              <h2>经营条件</h2>
+              <p>所有参数均为脱敏模拟数据</p>
+            </div>
+            <span class="step">1</span>
+          </div>
+
+          <div class="preset-row">
+            <button class="preset-btn active" data-preset="stable">稳定款</button>
+            <button class="preset-btn" data-preset="promo">大促款</button>
+            <button class="preset-btn" data-preset="slow">积压款</button>
+          </div>
+
+          <div class="control-group">
+            <div class="group-label">需求与经营</div>
+            <div class="field">
+              <div class="field-top">
+                <label for="forecast">Forecast 日销</label>
+                <span class="field-value" id="forecastValue"></span>
+              </div>
+              <input id="forecast" type="range" min="5" max="60" step="1">
+              <span class="field-note">你向供应链表达的未来基础销量判断。</span>
+            </div>
+            <div class="field">
+              <div class="field-top">
+                <label for="marketDemand">真实市场基准日销</label>
+                <span class="field-value" id="marketDemandValue"></span>
+              </div>
+              <input id="marketDemand" type="range" min="5" max="60" step="1">
+              <span class="field-note">模拟中实际存在、但运营无法完全确定的需求。</span>
+            </div>
+            <div class="field">
+              <div class="field-top">
+                <label for="promo">活动销量倍率</label>
+                <span class="field-value" id="promoValue"></span>
+              </div>
+              <input id="promo" type="range" min="1" max="3" step="0.1">
+              <span class="field-note">第 36–50 天进入活动期，共 15 天。</span>
+            </div>
+            <div class="number-inputs">
+              <div class="number-box">
+                <label for="price">成交价</label>
+                <input id="price" type="number" min="20" max="200" step="1">
+              </div>
+              <div class="number-box">
+                <label for="adBudget">广告/天</label>
+                <input id="adBudget" type="number" min="0" max="500" step="10">
+              </div>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <div class="group-label">库存与补货</div>
+            <div class="field">
+              <div class="field-top">
+                <label for="inventory">当前可售库存</label>
+                <span class="field-value" id="inventoryValue"></span>
+              </div>
+              <input id="inventory" type="range" min="100" max="6000" step="50">
+            </div>
+            <div class="field">
+              <div class="field-top">
+                <label for="replenishment">今天计划补货</label>
+                <span class="field-value" id="replenishmentValue"></span>
+              </div>
+              <input id="replenishment" type="range" min="0" max="8000" step="100">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <div class="group-label">全流程 Lead Time（对齐销售预测培训）</div>
+            <div class="number-inputs">
+              <div class="number-box">
+                <label for="reorderDays">备货间隔期</label>
+                <input id="reorderDays" type="number" min="0" max="60" value="14">
+              </div>
+              <div class="number-box">
+                <label for="productionDays">采购 LT</label>
+                <input id="productionDays" type="number" min="0" max="120" value="45">
+              </div>
+              <div class="number-box">
+                <label for="pickupDays">提货时效</label>
+                <input id="pickupDays" type="number" min="0" max="30" value="0">
+              </div>
+              <div class="number-box">
+                <label for="shippingDays">物流时效</label>
+                <input id="shippingDays" type="number" min="0" max="120" value="60">
+              </div>
+              <div class="number-box">
+                <label for="listingDays">上架时效</label>
+                <input id="listingDays" type="number" min="0" max="45" value="0">
+              </div>
+            </div>
+            <span class="field-note">备货提前期 = 备货间隔 + 采购LT + 提货 + 物流 + 上架；P0 普船参考 140 天（含安全库存 21）。</span>
+          </div>
+
+          <div class="control-group">
+            <div class="field">
+              <div class="field-top">
+                <label for="safetyDays">安全库存天数</label>
+                <span class="field-value" id="safetyDaysValue"></span>
+              </div>
+              <input id="safetyDays" type="range" min="0" max="45" step="1">
+              <span class="field-note">不延长物理流程，而是把补货警戒线提前。</span>
+            </div>
+            <button class="primary-btn desktop-run" id="runBtn" style="width:100%">运行 180 天模拟</button>
+          </div>
+        </aside>
+
+        <div class="content">
+          <section class="status-strip">
+            <div class="verdict" id="verdict">
+              <span>经营结论</span>
+              <strong id="verdictTitle">可以继续售卖</strong>
+              <small id="verdictText"></small>
+            </div>
+            <div class="metric">
+              <span>全流程 Lead Time</span>
+              <strong id="leadTimeMetric">0 天</strong>
+              <small>今天下单至海外可售</small>
+            </div>
+            <div class="metric">
+              <span>补货警戒线</span>
+              <strong id="triggerMetric">0 天</strong>
+              <small>Lead Time + 安全库存</small>
+            </div>
+            <div class="metric">
+              <span>模拟 GMV</span>
+              <strong id="gmvMetric">¥0</strong>
+              <small id="salesMetric">实际销量 0 件</small>
+            </div>
+            <div class="metric">
+              <span>贡献利润</span>
+              <strong id="profitMetric">¥0</strong>
+              <small id="marginMetric">利润率 0%</small>
+            </div>
+          </section>
+
+          <section class="panel section">
+            <div class="section-title">
+              <div>
+                <h2>供需时间轴</h2>
+                <p>关键不是“今天有货吗”，而是“新货到达前，旧货能不能撑住”。</p>
+              </div>
+              <div class="legend">
+                <span><i class="dot" style="background:var(--green)"></i>有货可售</span>
+                <span><i class="dot" style="background:var(--red)"></i>缺货窗口</span>
+                <span><i class="dot" style="background:var(--blue)"></i>安全缓冲</span>
+                <span><i class="dot" style="background:var(--purple)"></i>活动期</span>
+              </div>
+            </div>
+            <div class="timeline-wrap">
+              <div class="timeline" id="timeline">
+                <div class="track"><div class="track-fill" id="trackFill"></div></div>
+                <div class="risk-band" id="riskBand"></div>
+                <div class="safety-band" id="safetyBand"></div>
+                <div class="promo-band" id="promoBand"></div>
+                <div class="node" id="todayNode"><span class="node-label top"><b>今天</b>Day 0</span></div>
+                <div class="node" id="stockoutNode"><span class="node-label bottom"><b>库存耗尽</b><span id="stockoutLabel"></span></span></div>
+                <div class="node" id="arrivalNode"><span class="node-label top"><b>新货可售</b><span id="arrivalLabel"></span></span></div>
+                <div class="node" id="triggerNode"><span class="node-label bottom"><b>警戒覆盖点</b><span id="triggerLabel"></span></span></div>
+                <div class="ticks"><span>0 天</span><span>45 天</span><span>90 天</span><span>135 天</span><span>180 天</span></div>
+              </div>
+            </div>
+            <div class="formula">
+              <strong id="formulaLead">客观 Lead Time 0 天</strong>
+              <span class="operator">+</span>
+              <strong id="formulaSafety">安全库存 0 天</strong>
+              <span class="operator">=</span>
+              <strong id="formulaTrigger">补货警戒覆盖 0 天</strong>
+            </div>
+          </section>
+
+          <section class="panel section">
+            <div class="section-title">
+              <div>
+                <h2>每日库存曲线</h2>
+                <p>到货会抬高库存，实际销量会逐日消耗库存；库存为零时产生缺货损失。</p>
+              </div>
+              <span class="tag info" id="forecastBadge">Forecast 合理</span>
+            </div>
+            <div class="chart-wrap">
+              <svg id="inventoryChart" viewBox="0 0 900 270" preserveAspectRatio="none" role="img" aria-label="未来180天库存变化曲线"></svg>
+              <div class="chart-tooltip" id="chartTooltip"></div>
+            </div>
+          </section>
+
+          <section class="panel section">
+            <div class="section-title">
+              <div>
+                <h2>真实备货公式</h2>
+                <p>对齐《销售预测培训》：当天备货量 =（今天 + 提前期）前累计 Forecast − 全流程供给。</p>
+              </div>
+              <span class="tag" id="rgLineBadge">红绿线</span>
+            </div>
+            <div class="formula" style="grid-template-columns:repeat(2,auto)">
+              <div>备货提前期 <strong id="ltBreakdown">0 天</strong></div>
+              <div>全流程供给 <strong id="supplyQty">0 件</strong></div>
+              <div>覆盖窗口累计预测 <strong id="coverDemand">0 件</strong></div>
+              <div>当天备货量 <strong id="orderQty">0 件</strong></div>
+            </div>
+            <div id="rgLineText" class="field-note" style="margin-top:12px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+              <div class="number-box" style="background:var(--surface-2)">
+                <label>平均日销（加权 3/7/15/30 天 · ERP 口径）</label>
+                <div id="avgDaily" style="font-weight:720;font-size:18px;margin-top:4px">0 件/天</div>
+              </div>
+              <div class="number-box" style="background:var(--surface-2)">
+                <label>补货触发日（库存耗尽 − 安全库存）</label>
+                <div id="triggerOrderDay" style="font-weight:720;font-size:18px;margin-top:4px">—</div>
+              </div>
+            </div>
+          </section>
+
+          <div class="analysis-grid">
+            <section class="panel assessment">
+              <h3>模型诊断</h3>
+              <div class="assessment-list" id="assessmentList"></div>
+            </section>
+            <section class="panel assessment">
+              <h3>现在你会怎么决策？</h3>
+              <div id="decisionCopy" style="font-size:12px;color:var(--muted);line-height:1.6"></div>
+              <div class="decision-actions">
+                <button class="action-btn" data-action="forecast">校准 Forecast<small>向真实需求靠近</small></button>
+                <button class="action-btn" data-action="replenish">补足建议量<small>覆盖警戒期需求</small></button>
+                <button class="action-btn" data-action="expedite">改用更快物流<small>运输时效缩短 20 天</small></button>
+                <button class="action-btn" data-action="controlPromo">控制活动力度<small>活动倍率降低 0.4</small></button>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="learning-strip">
+              <div class="learning">
+                <b>Forecast 决定什么？</b>
+                <p>表达未来预计要卖多少，并影响备货量。过低容易缺货，过高容易积压。</p>
+              </div>
+              <div class="learning">
+                <b>Lead Time 决定什么？</b>
+                <p>决定今天的动作多久以后才产生供给，所以它决定最晚行动时间。</p>
+              </div>
+              <div class="learning">
+                <b>安全库存决定什么？</b>
+                <p>决定你愿意为预测偏差和物流延误预留多少缓冲，不是额外的生产流程。</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <button class="mobile-run" id="mobileRunBtn">运行模拟并查看结果</button>
+  </div>
+
+  <script>
+    const DAY_COUNT = 180;
+    const BASE_PRICE = 79;
+    const UNIT_COST = 31;
+    const PROMO_START = 36;
+    const PROMO_END = 50;
+
+    const presets = {
+      stable: {
+        forecast: 20, marketDemand: 22, promo: 1.4, price: 79, adBudget: 90,
+        inventory: 3500, replenishment: 3500, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 21
+      },
+      promo: {
+        forecast: 24, marketDemand: 29, promo: 2.4, price: 69, adBudget: 180,
+        inventory: 5600, replenishment: 5600, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 28
+      },
+      slow: {
+        forecast: 24, marketDemand: 11, promo: 1.2, price: 89, adBudget: 60,
+        inventory: 4200, replenishment: 2500, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 14
+      }
+    };
+
+    const ids = [
+      "forecast", "marketDemand", "promo", "price", "adBudget", "inventory",
+      "replenishment", "reorderDays", "productionDays", "pickupDays", "shippingDays",
+      "listingDays", "safetyDays"
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const formatNumber = (value, digits = 0) =>
+      new Intl.NumberFormat("zh-CN", { maximumFractionDigits: digits }).format(value);
+    const formatMoney = (value) =>
+      new Intl.NumberFormat("zh-CN", {
+        style: "currency", currency: "CNY", maximumFractionDigits: 0
+      }).format(value);
+
+    function getInput() {
+      return Object.fromEntries(ids.map(id => [id, Number($(id).value)]));
+    }
+
+    function setInput(values) {
+      Object.entries(values).forEach(([key, value]) => {
+        if ($(key)) $(key).value = value;
+      });
+      updateValueLabels();
+    }
+
+    function updateValueLabels() {
+      $("forecastValue").textContent = `${$("forecast").value} 件/天`;
+      $("marketDemandValue").textContent = `${$("marketDemand").value} 件/天`;
+      $("promoValue").textContent = `${Number($("promo").value).toFixed(1)}×`;
+      $("inventoryValue").textContent = `${formatNumber(Number($("inventory").value))} 件`;
+      $("replenishmentValue").textContent = `${formatNumber(Number($("replenishment").value))} 件`;
+      $("safetyDaysValue").textContent = `${$("safetyDays").value} 天`;
+    }
+
+    function simulate(input) {
+      const leadTime = input.reorderDays + input.productionDays + input.pickupDays + input.shippingDays + input.listingDays;
+      const triggerDays = leadTime + input.safetyDays;
+      const adFactor = 1 + Math.min(input.adBudget / 900, 0.45);
+      const priceFactor = clamp(BASE_PRICE / input.price, 0.72, 1.45);
+      let inventory = input.inventory;
+      let totalDemand = 0;
+      let totalSales = 0;
+      let lostSales = 0;
+      let revenue = 0;
+      let stockoutDays = 0;
+      let firstStockoutDay = null;
+      let lastStockoutDay = null;
+      const days = [];
+
+      for (let day = 0; day <= DAY_COUNT; day++) {
+        let arrival = 0;
+        if (day === leadTime && input.replenishment > 0) {
+          arrival = input.replenishment;
+          inventory += arrival;
+        }
+
+        const promoFactor = day >= PROMO_START && day <= PROMO_END ? input.promo : 1;
+        const weekdayFactor = [0.94, 0.97, 1, 1.02, 1.06, 1.12, 1.08][day % 7];
+        const demand = input.marketDemand * adFactor * priceFactor * promoFactor * weekdayFactor;
+        const sales = Math.min(inventory, demand);
+        const lost = demand - sales;
+        inventory = Math.max(0, inventory - sales);
+
+        totalDemand += demand;
+        totalSales += sales;
+        lostSales += lost;
+        revenue += sales * input.price;
+
+        if (lost > 0.01) {
+          stockoutDays++;
+          if (firstStockoutDay === null) firstStockoutDay = day;
+          lastStockoutDay = day;
+        }
+
+        days.push({ day, inventory, demand, sales, lost, arrival });
+      }
+
+      const avgDemand = totalDemand / (DAY_COUNT + 1);
+      const endingCoverage = avgDemand > 0 ? inventory / avgDemand : 0;
+      const safetyQty = input.forecast * input.safetyDays;
+      const triggerQty = input.forecast * triggerDays;
+      const preOrderGap = Math.max(0, triggerQty - input.inventory);
+      const postOrderPosition = input.inventory + input.replenishment;
+      const postOrderGap = triggerQty - postOrderPosition;
+      const forecastRatio = input.forecast / input.marketDemand;
+      const forecastState = forecastRatio < 0.85 ? "偏低" : forecastRatio > 1.18 ? "偏高" : "合理";
+      const stockoutBeforeArrival = firstStockoutDay !== null && firstStockoutDay < leadTime;
+      const physicalStockoutDay = days.find(d => d.inventory <= 0.01)?.day ?? DAY_COUNT;
+      const contributionProfit = revenue - totalSales * UNIT_COST - input.adBudget * (DAY_COUNT + 1);
+      const profitMargin = revenue > 0 ? contributionProfit / revenue : 0;
+      const overstock = endingCoverage > 120;
+
+      // ===== 真实备货公式（对齐《销售预测培训》）=====
+      // 平均日销：加权 3/7/15/30 天（ERP 口径），用模拟需求序列的近期窗口演示
+      const recent = days.slice(0, 30).map(d => d.demand);
+      const wAvg = (arr, n) => {
+        const s = arr.slice(-n);
+        return s.reduce((a, b) => a + b, 0) / s.length;
+      };
+      const avgDaily = wAvg(recent, 3) * 0.2 + wAvg(recent, 7) * 0.5 + wAvg(recent, 15) * 0.2 + wAvg(recent, 30) * 0.1;
+      // 当天备货量 =（今天 + 提前期）前累计 Forecast − 全流程供给
+      const supplyFull = input.inventory + input.replenishment;
+      const coverWindow = leadTime + 1;
+      const coverForecast = input.forecast * coverWindow;
+      const orderQty = Math.max(0, coverForecast - supplyFull);
+      // 红绿线：需求（覆盖窗口累计预测）> 供给（全流程供给）→ 预测过激/备货不足
+      const redGreen = coverForecast > supplyFull ? "red" : "green";
+      // 补货触发日（智能发货逻辑）：第 x 天断货 → x − 安全库存天 出现补货需求
+      const triggerOrderDay = firstStockoutDay !== null ? Math.max(0, firstStockoutDay - input.safetyDays) : null;
+
+      let level = "good";
+      let title = "可以继续售卖";
+      let text = "供给能接住当前需求，仍需持续滚动检查 Forecast。";
+      if (stockoutBeforeArrival || stockoutDays > 20) {
+        level = "danger";
+        title = "存在明显断货风险";
+        text = `旧货可能在第 ${firstStockoutDay ?? physicalStockoutDay} 天耗尽，新货第 ${leadTime} 天才可售。`;
+      } else if (stockoutDays > 0 || overstock || forecastState !== "合理") {
+        level = "warn";
+        title = overstock ? "可以卖，但有积压风险" : "可以卖，但需要校准";
+        text = overstock
+          ? `模拟结束仍有 ${formatNumber(inventory)} 件，库存覆盖约 ${formatNumber(endingCoverage)} 天。`
+          : `当前 Forecast ${forecastState}，会让供需计划偏离真实市场。`;
+      }
+
+      return {
+        input, leadTime, triggerDays, adFactor, priceFactor, days, totalDemand,
+        totalSales, lostSales, revenue, stockoutDays, firstStockoutDay,
+        lastStockoutDay, endingInventory: inventory, endingCoverage, safetyQty,
+        triggerQty, preOrderGap, postOrderGap, postOrderPosition, forecastState,
+        forecastRatio, physicalStockoutDay, stockoutBeforeArrival,
+        contributionProfit, profitMargin, overstock, level, title, text, avgDemand,
+        avgDaily, supplyFull, coverWindow, coverForecast, orderQty, redGreen, triggerOrderDay
+      };
+    }
+
+    function percent(day) {
+      return clamp(day / DAY_COUNT * 100, 0, 100);
+    }
+
+    function renderTimeline(result) {
+      $("trackFill").style.width = `${percent(Math.min(result.physicalStockoutDay, DAY_COUNT))}%`;
+      $("todayNode").style.left = "26px";
+      const usableWidth = "calc(100% - 52px)";
+      const place = (el, day) => {
+        el.style.left = `calc(26px + ${usableWidth} * ${percent(day) / 100})`;
+      };
+      place($("stockoutNode"), result.physicalStockoutDay);
+      place($("arrivalNode"), result.leadTime);
+      place($("triggerNode"), result.triggerDays);
+      $("stockoutLabel").textContent = `第 ${result.physicalStockoutDay} 天`;
+      $("arrivalLabel").textContent = `第 ${result.leadTime} 天`;
+      $("triggerLabel").textContent = `第 ${result.triggerDays} 天`;
+
+      const riskStart = result.firstStockoutDay ?? 0;
+      const riskEnd = result.lastStockoutDay ?? riskStart;
+      $("riskBand").style.left = `calc(26px + ${usableWidth} * ${percent(riskStart) / 100})`;
+      $("riskBand").style.width = result.stockoutDays
+        ? `calc(${usableWidth} * ${(percent(riskEnd) - percent(riskStart)) / 100})`
+        : "0";
+
+      const safetyStart = result.leadTime;
+      const safetyEnd = Math.min(result.triggerDays, DAY_COUNT);
+      $("safetyBand").style.left = `calc(26px + ${usableWidth} * ${percent(safetyStart) / 100})`;
+      $("safetyBand").style.width = `calc(${usableWidth} * ${(percent(safetyEnd) - percent(safetyStart)) / 100})`;
+
+      $("promoBand").style.left = `calc(26px + ${usableWidth} * ${percent(PROMO_START) / 100})`;
+      $("promoBand").style.width = `calc(${usableWidth} * ${(percent(PROMO_END) - percent(PROMO_START)) / 100})`;
+
+      $("formulaLead").textContent = `客观 Lead Time ${result.leadTime} 天`;
+      $("formulaSafety").textContent = `安全库存 ${result.input.safetyDays} 天`;
+      $("formulaTrigger").textContent = `补货警戒覆盖 ${result.triggerDays} 天`;
+    }
+
+    function renderChart(result) {
+      const svg = $("inventoryChart");
+      const width = 900;
+      const height = 270;
+      const pad = { left: 46, right: 18, top: 18, bottom: 32 };
+      const chartW = width - pad.left - pad.right;
+      const chartH = height - pad.top - pad.bottom;
+      const maxInventory = Math.max(...result.days.map(d => d.inventory), result.triggerQty, 1) * 1.08;
+      const x = day => pad.left + day / DAY_COUNT * chartW;
+      const y = qty => pad.top + chartH - qty / maxInventory * chartH;
+      const line = result.days.map((d, i) => `${i ? "L" : "M"} ${x(d.day).toFixed(2)} ${y(d.inventory).toFixed(2)}`).join(" ");
+      const area = `${line} L ${x(DAY_COUNT)} ${y(0)} L ${x(0)} ${y(0)} Z`;
+      const grid = [0, .25, .5, .75, 1].map(r => {
+        const yy = pad.top + chartH * r;
+        const value = maxInventory * (1 - r);
+        return `<line x1="${pad.left}" x2="${width - pad.right}" y1="${yy}" y2="${yy}" stroke="#e3e7e1" stroke-width="1"/>
+          <text x="${pad.left - 8}" y="${yy + 4}" text-anchor="end" fill="#7b8580" font-size="10">${formatNumber(value)}</text>`;
+      }).join("");
+      const xTicks = [0, 45, 90, 135, 180].map(day =>
+        `<text x="${x(day)}" y="${height - 9}" text-anchor="middle" fill="#7b8580" font-size="10">${day}天</text>`
+      ).join("");
+      const arrivalX = x(result.leadTime);
+      const safetyY = y(result.safetyQty);
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="inventoryArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#177957" stop-opacity=".22"/>
+            <stop offset="100%" stop-color="#177957" stop-opacity=".02"/>
+          </linearGradient>
+        </defs>
+        ${grid}
+        <line x1="${pad.left}" x2="${width - pad.right}" y1="${safetyY}" y2="${safetyY}" stroke="#246bce" stroke-dasharray="5 5"/>
+        <text x="${width - pad.right}" y="${safetyY - 6}" text-anchor="end" fill="#246bce" font-size="10">安全库存 ${formatNumber(result.safetyQty)} 件</text>
+        <rect x="${x(PROMO_START)}" y="${pad.top}" width="${x(PROMO_END) - x(PROMO_START)}" height="${chartH}" fill="#7357a8" opacity=".06"/>
+        <path d="${area}" fill="url(#inventoryArea)"/>
+        <path d="${line}" fill="none" stroke="#177957" stroke-width="3" vector-effect="non-scaling-stroke"/>
+        <line x1="${arrivalX}" x2="${arrivalX}" y1="${pad.top}" y2="${pad.top + chartH}" stroke="#18201d" stroke-dasharray="4 4"/>
+        <text x="${arrivalX + 6}" y="${pad.top + 12}" fill="#18201d" font-size="10">补货到达</text>
+        ${xTicks}
+        <rect id="chartHit" x="${pad.left}" y="${pad.top}" width="${chartW}" height="${chartH}" fill="transparent"/>
+        <line id="chartCursor" x1="0" x2="0" y1="${pad.top}" y2="${pad.top + chartH}" stroke="#18201d" opacity="0"/>
+        <circle id="chartPoint" cx="0" cy="0" r="4" fill="#fff" stroke="#177957" stroke-width="2" opacity="0"/>
+      `;
+
+      const hit = svg.querySelector("#chartHit");
+      const cursor = svg.querySelector("#chartCursor");
+      const point = svg.querySelector("#chartPoint");
+      const tooltip = $("chartTooltip");
+      hit.addEventListener("mousemove", (event) => {
+        const rect = svg.getBoundingClientRect();
+        const localX = (event.clientX - rect.left) / rect.width * width;
+        const day = clamp(Math.round((localX - pad.left) / chartW * DAY_COUNT), 0, DAY_COUNT);
+        const datum = result.days[day];
+        const cx = x(day);
+        const cy = y(datum.inventory);
+        cursor.setAttribute("x1", cx);
+        cursor.setAttribute("x2", cx);
+        cursor.setAttribute("opacity", "0.35");
+        point.setAttribute("cx", cx);
+        point.setAttribute("cy", cy);
+        point.setAttribute("opacity", "1");
+        tooltip.style.display = "block";
+        tooltip.style.left = `${cx / width * 100}%`;
+        tooltip.style.top = `${cy / height * 100}%`;
+        tooltip.textContent = `第 ${day} 天 · 库存 ${formatNumber(datum.inventory)} · 销量 ${formatNumber(datum.sales, 1)}`;
+      });
+      hit.addEventListener("mouseleave", () => {
+        cursor.setAttribute("opacity", "0");
+        point.setAttribute("opacity", "0");
+        tooltip.style.display = "none";
+      });
+    }
+
+    function diagnosticRows(result) {
+      const forecastClass = result.forecastState === "合理" ? "good" : result.forecastState === "偏低" ? "bad" : "warn";
+      const forecastText = result.forecastState === "合理"
+        ? "Forecast 与市场基准接近，供应计划的起点相对可靠。"
+        : result.forecastState === "偏低"
+          ? `Forecast 比市场基准低 ${formatNumber((1 - result.forecastRatio) * 100)}%，供应链可能准备不足。`
+          : `Forecast 比市场基准高 ${formatNumber((result.forecastRatio - 1) * 100)}%，需要防止过量备货。`;
+      const timingClass = result.stockoutBeforeArrival ? "bad" : result.stockoutDays ? "warn" : "good";
+      const timingText = result.stockoutBeforeArrival
+        ? `库存先耗尽，新货晚到约 ${Math.max(0, result.leadTime - result.firstStockoutDay)} 天。`
+        : result.stockoutDays
+          ? `到货后仍有 ${result.stockoutDays} 个缺货日，补货数量不足以覆盖后续需求。`
+          : "新货能在库存耗尽前接续，没有模拟缺货。";
+      const stockClass = result.overstock ? "warn" : "good";
+      const stockText = result.overstock
+        ? `期末库存 ${formatNumber(result.endingInventory)} 件，覆盖约 ${formatNumber(result.endingCoverage)} 天。`
+        : `期末库存覆盖约 ${formatNumber(result.endingCoverage)} 天，未触发重度积压规则。`;
+      const positionClass = result.postOrderGap > 0 ? "bad" : result.postOrderGap < -result.input.forecast * 60 ? "warn" : "good";
+      const positionText = result.postOrderGap > 0
+        ? `下单后库存位置仍低于警戒需求 ${formatNumber(result.postOrderGap)} 件。`
+        : `下单后库存位置高于警戒需求 ${formatNumber(Math.abs(result.postOrderGap))} 件。`;
+
+      return [
+        ["Forecast", forecastClass, forecastText],
+        ["到货衔接", timingClass, timingText],
+        ["库存健康", stockClass, stockText],
+        ["补货位置", positionClass, positionText]
+      ];
+    }
+
+    function renderAssessment(result) {
+      $("assessmentList").innerHTML = diagnosticRows(result).map(([label, cls, text]) => `
+        <div class="assessment-item">
+          <span class="tag ${cls}">${label}</span>
+          <span>${text}</span>
+        </div>
+      `).join("");
+
+      let decision = "";
+      if (result.stockoutBeforeArrival) {
+        decision = `当前主要矛盾是时间来不及：补货在第 ${result.leadTime} 天可售，但库存可能在第 ${result.firstStockoutDay} 天前后耗尽。先处理运输、活动节奏或临时调拨，再讨论扩大销量。`;
+      } else if (result.overstock) {
+        decision = `当前主要矛盾是供给高于需求。继续加大补货会压低周转，应先校准 Forecast、降低补货或设计清库节奏。`;
+      } else if (result.forecastState !== "合理") {
+        decision = `当前供需暂时能衔接，但 Forecast ${result.forecastState}。先把预测校准到合理区间，避免错误信号继续传递给采购和生产。`;
+      } else {
+        decision = "当前供需结构健康。下一步不是盲目扩大销量，而是观察活动、广告和真实需求变化，持续滚动修正 Forecast。";
+      }
+      $("decisionCopy").textContent = decision;
+    }
+
+    function renderRealOrder(result) {
+      $("ltBreakdown").textContent = `${result.leadTime} 天`;
+      $("supplyQty").textContent = `${formatNumber(result.supplyFull)} 件`;
+      $("coverDemand").textContent = `${formatNumber(result.coverForecast)} 件`;
+      $("orderQty").textContent = `${formatNumber(result.orderQty)} 件`;
+      const badge = $("rgLineBadge");
+      if (result.redGreen === "red") {
+        badge.textContent = "红线 · 备货不足";
+        badge.className = "tag bad";
+        $("rgLineText").textContent = `覆盖窗口（今天 ~ 第 ${result.leadTime} 天）累计预测 ${formatNumber(result.coverForecast)} 件，超过全流程供给 ${formatNumber(result.supplyFull)} 件。预测偏激进或备货不足，建议补 ${formatNumber(result.orderQty)} 件。`;
+      } else {
+        badge.textContent = "绿线 · 覆盖安全";
+        badge.className = "tag good";
+        $("rgLineText").textContent = `覆盖窗口累计预测 ${formatNumber(result.coverForecast)} 件，未超过全流程供给 ${formatNumber(result.supplyFull)} 件。供给可接住预测，当天备货量 ${formatNumber(result.orderQty)} 件。`;
+      }
+      $("avgDaily").textContent = `${formatNumber(result.avgDaily, 1)} 件/天`;
+      $("triggerOrderDay").textContent = result.triggerOrderDay !== null ? `第 ${result.triggerOrderDay} 天` : "当前无断货";
+    }
+
+    function render(result) {
+      const verdict = $("verdict");
+      verdict.className = `verdict ${result.level === "good" ? "" : result.level}`.trim();
+      $("verdictTitle").textContent = result.title;
+      $("verdictText").textContent = result.text;
+      $("leadTimeMetric").textContent = `${result.leadTime} 天`;
+      $("triggerMetric").textContent = `${result.triggerDays} 天`;
+      $("gmvMetric").textContent = formatMoney(result.revenue);
+      $("salesMetric").textContent = `实际销量 ${formatNumber(result.totalSales)} 件`;
+      $("profitMetric").textContent = formatMoney(result.contributionProfit);
+      $("marginMetric").textContent = `贡献利润率 ${formatNumber(result.profitMargin * 100, 1)}%`;
+
+      const badge = $("forecastBadge");
+      badge.textContent = `Forecast ${result.forecastState}`;
+      badge.className = `tag ${result.forecastState === "合理" ? "good" : result.forecastState === "偏低" ? "bad" : "warn"}`;
+
+      renderRealOrder(result);
+      renderTimeline(result);
+      renderChart(result);
+      renderAssessment(result);
+      window.latestResult = result;
+    }
+
+    function runSimulation(scroll = false) {
+      updateValueLabels();
+      render(simulate(getInput()));
+      if (scroll && window.innerWidth < 860) {
+        document.querySelector(".status-strip").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    function setPreset(name) {
+      setInput(presets[name]);
+      document.querySelectorAll(".preset-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.preset === name);
+      });
+      runSimulation();
+    }
+
+    ids.forEach(id => {
+      $(id).addEventListener("input", () => {
+        document.querySelectorAll(".preset-btn").forEach(btn => btn.classList.remove("active"));
+        runSimulation();
+      });
+    });
+
+    document.querySelectorAll(".preset-btn").forEach(btn => {
+      btn.addEventListener("click", () => setPreset(btn.dataset.preset));
+    });
+
+    document.querySelectorAll(".action-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const action = btn.dataset.action;
+        const result = window.latestResult;
+        if (action === "forecast") $("forecast").value = $("marketDemand").value;
+        if (action === "replenish") {
+          $("replenishment").value = clamp(
+            Math.ceil(Math.max(0, result.coverForecast - result.input.inventory) / 100) * 100,
+            0, 8000
+          );
+        }
+        if (action === "expedite") $("shippingDays").value = Math.max(7, Number($("shippingDays").value) - 20);
+        if (action === "controlPromo") $("promo").value = Math.max(1, Number($("promo").value) - 0.4).toFixed(1);
+        document.querySelectorAll(".preset-btn").forEach(p => p.classList.remove("active"));
+        runSimulation();
+      });
+    });
+
+    $("runBtn").addEventListener("click", () => runSimulation(true));
+    $("mobileRunBtn").addEventListener("click", () => runSimulation(true));
+    $("resetBtn").addEventListener("click", () => setPreset("stable"));
+    $("helpBtn").addEventListener("click", () => {
+      alert("学习目标：\\n\\n1. Forecast 是供应计划的起点。\\n2. 全流程 Lead Time 是从今天行动到海外可售的客观时长。\\n3. 安全库存把补货警戒线提前，但不会让生产或运输过程变长。\\n4. 运营要同时管理销量、利润、缺货与积压。");
+    });
+
+    setPreset("stable");
+  </script>
+</body>
+</html>
