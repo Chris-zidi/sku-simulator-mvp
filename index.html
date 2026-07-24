@@ -852,25 +852,30 @@
           </div>
 
           <div class="control-group">
-            <div class="group-label">全流程 Lead Time</div>
+            <div class="group-label">全流程 Lead Time（对齐销售预测培训）</div>
             <div class="number-inputs">
               <div class="number-box">
-                <label for="productionDays">采购生产</label>
-                <input id="productionDays" type="number" min="0" max="120">
+                <label for="reorderDays">备货间隔期</label>
+                <input id="reorderDays" type="number" min="0" max="60" value="14">
               </div>
               <div class="number-box">
-                <label for="pickupDays">提货出运</label>
-                <input id="pickupDays" type="number" min="0" max="30">
+                <label for="productionDays">采购 LT</label>
+                <input id="productionDays" type="number" min="0" max="120" value="45">
               </div>
               <div class="number-box">
-                <label for="shippingDays">国际运输</label>
-                <input id="shippingDays" type="number" min="0" max="120">
+                <label for="pickupDays">提货时效</label>
+                <input id="pickupDays" type="number" min="0" max="30" value="0">
               </div>
               <div class="number-box">
-                <label for="listingDays">清关上架</label>
-                <input id="listingDays" type="number" min="0" max="45">
+                <label for="shippingDays">物流时效</label>
+                <input id="shippingDays" type="number" min="0" max="120" value="60">
+              </div>
+              <div class="number-box">
+                <label for="listingDays">上架时效</label>
+                <input id="listingDays" type="number" min="0" max="45" value="0">
               </div>
             </div>
+            <span class="field-note">备货提前期 = 备货间隔 + 采购LT + 提货 + 物流 + 上架；P0 普船参考 140 天（含安全库存 21）。</span>
           </div>
 
           <div class="control-group">
@@ -964,6 +969,33 @@
             </div>
           </section>
 
+          <section class="panel section">
+            <div class="section-title">
+              <div>
+                <h2>真实备货公式</h2>
+                <p>对齐《销售预测培训》：当天备货量 =（今天 + 提前期）前累计 Forecast − 全流程供给。</p>
+              </div>
+              <span class="tag" id="rgLineBadge">红绿线</span>
+            </div>
+            <div class="formula" style="grid-template-columns:repeat(2,auto)">
+              <div>备货提前期 <strong id="ltBreakdown">0 天</strong></div>
+              <div>全流程供给 <strong id="supplyQty">0 件</strong></div>
+              <div>覆盖窗口累计预测 <strong id="coverDemand">0 件</strong></div>
+              <div>当天备货量 <strong id="orderQty">0 件</strong></div>
+            </div>
+            <div id="rgLineText" class="field-note" style="margin-top:12px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+              <div class="number-box" style="background:var(--surface-2)">
+                <label>平均日销（加权 3/7/15/30 天 · ERP 口径）</label>
+                <div id="avgDaily" style="font-weight:720;font-size:18px;margin-top:4px">0 件/天</div>
+              </div>
+              <div class="number-box" style="background:var(--surface-2)">
+                <label>补货触发日（库存耗尽 − 安全库存）</label>
+                <div id="triggerOrderDay" style="font-weight:720;font-size:18px;margin-top:4px">—</div>
+              </div>
+            </div>
+          </section>
+
           <div class="analysis-grid">
             <section class="panel assessment">
               <h3>模型诊断</h3>
@@ -1014,24 +1046,24 @@
     const presets = {
       stable: {
         forecast: 20, marketDemand: 22, promo: 1.4, price: 79, adBudget: 90,
-        inventory: 2500, replenishment: 2200, productionDays: 38,
-        pickupDays: 5, shippingDays: 42, listingDays: 7, safetyDays: 21
+        inventory: 3500, replenishment: 3500, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 21
       },
       promo: {
         forecast: 24, marketDemand: 29, promo: 2.4, price: 69, adBudget: 180,
-        inventory: 2300, replenishment: 3000, productionDays: 42,
-        pickupDays: 6, shippingDays: 48, listingDays: 8, safetyDays: 28
+        inventory: 5600, replenishment: 5600, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 28
       },
       slow: {
         forecast: 24, marketDemand: 11, promo: 1.2, price: 89, adBudget: 60,
-        inventory: 4200, replenishment: 2500, productionDays: 35,
-        pickupDays: 5, shippingDays: 40, listingDays: 7, safetyDays: 14
+        inventory: 4200, replenishment: 2500, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 14
       }
     };
 
     const ids = [
       "forecast", "marketDemand", "promo", "price", "adBudget", "inventory",
-      "replenishment", "productionDays", "pickupDays", "shippingDays",
+      "replenishment", "reorderDays", "productionDays", "pickupDays", "shippingDays",
       "listingDays", "safetyDays"
     ];
 
@@ -1065,7 +1097,7 @@
     }
 
     function simulate(input) {
-      const leadTime = input.productionDays + input.pickupDays + input.shippingDays + input.listingDays;
+      const leadTime = input.reorderDays + input.productionDays + input.pickupDays + input.shippingDays + input.listingDays;
       const triggerDays = leadTime + input.safetyDays;
       const adFactor = 1 + Math.min(input.adBudget / 900, 0.45);
       const priceFactor = clamp(BASE_PRICE / input.price, 0.72, 1.45);
@@ -1120,7 +1152,25 @@
       const physicalStockoutDay = days.find(d => d.inventory <= 0.01)?.day ?? DAY_COUNT;
       const contributionProfit = revenue - totalSales * UNIT_COST - input.adBudget * (DAY_COUNT + 1);
       const profitMargin = revenue > 0 ? contributionProfit / revenue : 0;
-      const overstock = endingCoverage > 120 || postOrderGap < -input.forecast * 90;
+      const overstock = endingCoverage > 120;
+
+      // ===== 真实备货公式（对齐《销售预测培训》）=====
+      // 平均日销：加权 3/7/15/30 天（ERP 口径），用模拟需求序列的近期窗口演示
+      const recent = days.slice(0, 30).map(d => d.demand);
+      const wAvg = (arr, n) => {
+        const s = arr.slice(-n);
+        return s.reduce((a, b) => a + b, 0) / s.length;
+      };
+      const avgDaily = wAvg(recent, 3) * 0.2 + wAvg(recent, 7) * 0.5 + wAvg(recent, 15) * 0.2 + wAvg(recent, 30) * 0.1;
+      // 当天备货量 =（今天 + 提前期）前累计 Forecast − 全流程供给
+      const supplyFull = input.inventory + input.replenishment;
+      const coverWindow = leadTime + 1;
+      const coverForecast = input.forecast * coverWindow;
+      const orderQty = Math.max(0, coverForecast - supplyFull);
+      // 红绿线：需求（覆盖窗口累计预测）> 供给（全流程供给）→ 预测过激/备货不足
+      const redGreen = coverForecast > supplyFull ? "red" : "green";
+      // 补货触发日（智能发货逻辑）：第 x 天断货 → x − 安全库存天 出现补货需求
+      const triggerOrderDay = firstStockoutDay !== null ? Math.max(0, firstStockoutDay - input.safetyDays) : null;
 
       let level = "good";
       let title = "可以继续售卖";
@@ -1143,7 +1193,8 @@
         lastStockoutDay, endingInventory: inventory, endingCoverage, safetyQty,
         triggerQty, preOrderGap, postOrderGap, postOrderPosition, forecastState,
         forecastRatio, physicalStockoutDay, stockoutBeforeArrival,
-        contributionProfit, profitMargin, overstock, level, title, text, avgDemand
+        contributionProfit, profitMargin, overstock, level, title, text, avgDemand,
+        avgDaily, supplyFull, coverWindow, coverForecast, orderQty, redGreen, triggerOrderDay
       };
     }
 
@@ -1309,6 +1360,25 @@
       $("decisionCopy").textContent = decision;
     }
 
+    function renderRealOrder(result) {
+      $("ltBreakdown").textContent = `${result.leadTime} 天`;
+      $("supplyQty").textContent = `${formatNumber(result.supplyFull)} 件`;
+      $("coverDemand").textContent = `${formatNumber(result.coverForecast)} 件`;
+      $("orderQty").textContent = `${formatNumber(result.orderQty)} 件`;
+      const badge = $("rgLineBadge");
+      if (result.redGreen === "red") {
+        badge.textContent = "红线 · 备货不足";
+        badge.className = "tag bad";
+        $("rgLineText").textContent = `覆盖窗口（今天 ~ 第 ${result.leadTime} 天）累计预测 ${formatNumber(result.coverForecast)} 件，超过全流程供给 ${formatNumber(result.supplyFull)} 件。预测偏激进或备货不足，建议补 ${formatNumber(result.orderQty)} 件。`;
+      } else {
+        badge.textContent = "绿线 · 覆盖安全";
+        badge.className = "tag good";
+        $("rgLineText").textContent = `覆盖窗口累计预测 ${formatNumber(result.coverForecast)} 件，未超过全流程供给 ${formatNumber(result.supplyFull)} 件。供给可接住预测，当天备货量 ${formatNumber(result.orderQty)} 件。`;
+      }
+      $("avgDaily").textContent = `${formatNumber(result.avgDaily, 1)} 件/天`;
+      $("triggerOrderDay").textContent = result.triggerOrderDay !== null ? `第 ${result.triggerOrderDay} 天` : "当前无断货";
+    }
+
     function render(result) {
       const verdict = $("verdict");
       verdict.className = `verdict ${result.level === "good" ? "" : result.level}`.trim();
@@ -1325,6 +1395,7 @@
       badge.textContent = `Forecast ${result.forecastState}`;
       badge.className = `tag ${result.forecastState === "合理" ? "good" : result.forecastState === "偏低" ? "bad" : "warn"}`;
 
+      renderRealOrder(result);
       renderTimeline(result);
       renderChart(result);
       renderAssessment(result);
@@ -1365,7 +1436,7 @@
         if (action === "forecast") $("forecast").value = $("marketDemand").value;
         if (action === "replenish") {
           $("replenishment").value = clamp(
-            Math.ceil(Math.max(0, result.triggerQty - result.input.inventory) / 100) * 100,
+            Math.ceil(Math.max(0, result.coverForecast - result.input.inventory) / 100) * 100,
             0, 8000
           );
         }
