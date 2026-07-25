@@ -951,20 +951,20 @@
     .lab-head h1 { font-size: 24px; margin: 6px 0 6px; }
     .lab-head p { color: var(--ink-soft); line-height: 1.6; margin: 0 0 14px; }
     .lab-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-    .lab-stage { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
-    .lab-canvas-box { width: 100%; }
-    .lab-canvas-box canvas { width: 100%; height: clamp(220px, 38vh, 320px); display: block; border-radius: 10px; background: var(--surface-2); }
-    .lab-readout { margin-top: 10px; }
+    .lab-stage { position: sticky; top: 0; align-self: start; height: calc(100vh - 24px); display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
+    .lab-canvas-box { flex: 1; min-height: 0; min-width: 0; display: flex; }
+    .lab-canvas-box canvas { width: 100%; height: 100%; min-height: 380px; display: block; border-radius: 10px; background: var(--surface-2); }
+    .lab-readout { margin-top: 10px; flex-shrink: 0; }
     .ro-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
     .ro-cell { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px; }
     .ro-k { display: block; font-size: 10.5px; color: var(--muted); }
     .ro-v { display: block; font-size: 13.5px; font-weight: 700; margin-top: 1px; }
     .ro-v small { font-size: 9.5px; color: var(--muted); font-weight: 400; }
     .ro-badge.bad { color: var(--red); }
-    .lab-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .lab-actions { display: flex; gap: 8px; margin-top: 10px; flex-shrink: 0; }
     .lab-actions .primary-btn { flex: 1; min-width: 0; }
     .lab-actions .ghost-btn { flex: 1; min-width: 0; }
-    .lab-side { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+    .lab-side { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; position: sticky; top: 0; height: calc(100vh - 24px); overflow-y: auto; }
     .lab-lesson-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .lab-logic { background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
     .lab-step { font-size: 12px; color: var(--muted); }
