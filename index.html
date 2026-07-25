@@ -982,6 +982,13 @@
     .lab-note { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
     .lab-field input[type=range] { width: 100%; accent-color: var(--accent); }
     .lab-hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin: 12px 0 0; border-top: 1px dashed var(--line); padding-top: 10px; }
+    .lab-elements { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+    .lab-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); white-space: nowrap; transition: all .2s; }
+    .lab-chip.done { color: var(--ink-soft); border-color: var(--green); opacity: .92; }
+    .lab-chip.current { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 0 3px var(--accent-soft); }
+    .lab-intro { font-size: 13.5px; line-height: 1.7; color: var(--ink-soft); background: var(--accent-soft); border-radius: 10px; padding: 12px; margin: 8px 0 12px; }
+    .lab-intro b { color: var(--ink); }
+    .lab-new { display: inline-block; font-size: 10px; background: var(--accent); color: #fff; border-radius: 6px; padding: 1px 6px; margin-left: 4px; vertical-align: middle; }
     .ghost-btn { font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
     .ghost-btn:active { transform: translateY(1px); }
     @media (max-width: 860px) {
@@ -1374,7 +1381,7 @@
       <div class="lab-wrap">
         <div class="lab-head">
           <h1>🎬 动画实验室 · Forecast 可视化</h1>
-          <p>看库存怎么一天天消失、怎么卖完、怎么超卖；拖动参数亲手试，跟着引导一个概念一个概念搞懂。</p>
+          <p>一个元素一个元素往上加：先认识库存，再看它怎么一天天消失、怎么卖完、怎么超卖；拖动参数亲手试，跟着引导一个概念一个概念搞懂。</p>
         </div>
         <div class="lab-grid">
           <div class="lab-stage">
@@ -1392,7 +1399,9 @@
               <span class="lab-logic" id="labLogic">库存</span>
               <span class="lab-step" id="labStep">1 / 7</span>
             </div>
+            <div class="lab-elements" id="labElements"></div>
             <h2 id="labTitle"></h2>
+            <div class="lab-intro" id="labIntro"></div>
             <div class="lab-instruct" id="labInstruct"></div>
             <div class="lab-observe" id="labObserve"></div>
             <div class="lab-ctrl">
@@ -1400,7 +1409,7 @@
               <button class="primary-btn" id="labNext">下一步 →</button>
             </div>
             <div class="lab-params" id="labParams"></div>
-            <p class="lab-hint">提示：从侧栏「下一步」跟着走；每个课题只让你动一个滑块，先看演示、再自己拖一遍，观察曲线和读数怎么变。</p>
+            <p class="lab-hint">搭积木式：图是一步步「长」出来的——每关只加一个新元素，只让你动当前关的滑块。先看演示、再自己拖一遍，观察曲线和读数怎么变，懂了再点「下一步」。</p>
           </aside>
         </div>
       </div>
