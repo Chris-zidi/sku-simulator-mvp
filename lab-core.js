@@ -57,10 +57,10 @@
         "<b>为啥库存线变斜了？</b>每过 1 天，库存就少「日均销量」件——线每走一格（向右 1 天）就向下掉「日销」件。<br>" +
         "<b>斜率</b>（线陡不陡）= -日销。日销越大，线越陡。<br>" +
         "<b>三角形面积</b> = 一共卖出了多少件。三角形 = (1/2) × 底 × 高 = (1/2) × 天数 × 库存 = 全部库存卖光。",
-      instruct: "拖【真实日均销量】从 8 拉到 24：线越来越陡（斜率绝对值变大），三角形面积不变（卖出的总量还是初始库存）。",
-      observe: "观察：日销 ↑ → 斜率更陡 → 售罄更快。三角形面积 = 你能卖的总数。",
-      baseline: { inventory: 4800, demand: 8, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { demand: 32 },
+      instruct: "拖【真实日均销量】从 27 拉到 54：📉 绿斜线越来越陡（斜率绝对值变大），🔺 三角形被「压扁」——底变短（更快卖完）但高不变。",
+      observe: "观察 📉 绿斜线：日销 ↑ → 斜率更陡 → 更快撞到 0。观察 ▨ 绿色填充：三角形面积 = 这批货一共能卖出的总件数。",
+      baseline: { inventory: 4800, demand: 27, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
+      demoTarget: { demand: 54 },
       dict: [
         { k: "📉 斜线", v: "每向右 1 天，库存减「日均销量」件。斜率 = -日销。" },
         { k: "🔺 三角形", v: "斜线 + 横线 + 纵线围成的面积 = 一共卖出几件 = 初始库存。" },
@@ -77,8 +77,8 @@
         "斜线一路往下掉，撞到 0 那天就是<b>售罄日</b>——你货全卖光了，再往后就没得卖。<br>" +
         "从今天到售罄日之间的天数 = <b>库存覆盖天数</b> = 库存 ÷ 日销。<br>" +
         "<b>为啥用一根红色竖线？</b>竖线能精确标出「那一天」在时间轴的哪个位置——一眼看到还能撑多久。",
-      instruct: "再拖【真实日均销量】拉高：红竖线往左移（更早断货）；拉低：红竖线右移（撑更久）。",
-      observe: "观察：红竖线 = 售罄日。覆盖天数 = 库存 / 日销。",
+      instruct: "再拖【真实日均销量】拉高：▏红竖虚线往左移（更早断货）；拉低：红竖虚线右移（撑更久）。",
+      observe: "观察 ▏红竖虚线 = 售罄日（📉 绿线撞到 0 那天）。观察读数「库存覆盖」= 库存 ÷ 日销 = 红线离今天多少天。",
       baseline: { inventory: 4800, demand: 32, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
       demoTarget: { demand: 64 },
       dict: [
@@ -96,8 +96,8 @@
         "你开工前会先「预测」每天能卖多少——这就是<b>计划</b>。<br>" +
         "<b>为啥用虚线？</b>虚线 = 还没发生 = 计划。绿实线 = 真实。<br>" +
         "如果预测 < 真实：你以为还够，其实已经偷偷断货；两条线分得越开，决策错得越远。",
-      instruct: "拖【预测日均销量】从 32 拉到和真实 48 一样：紫虚线追上绿实线，两线重合 = 计划对得上。",
-      observe: "观察：紫虚线=你的计划。预测偏低 = 自欺欺人；预测偏高 = 备货过多人压仓。",
+      instruct: "拖【预测日均销量】从 32 拉到和真实 48 一样：╌ 紫虚线越来越贴近 📉 绿实线，两线重合 = 计划对得上现实。",
+      observe: "观察 ╌ 紫虚线（计划）和 📉 绿实线（真实）之间的张口：口越大 = 预测错得越远。紫线更平缓 = 你低估了销量 → 会突然断货。",
       baseline: { inventory: 4800, demand: 48, forecast: 32, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
       demoTarget: { forecast: 48 },
       dict: [
@@ -115,8 +115,8 @@
         "现实里：库存快没了要补货，但货从下单到上架要等很久（<b>提前期</b>）。<br>" +
         "<b>绿色箭头 = 到货日</b>。箭头下方数字 = 一次补进来几件。<br>" +
         "如果<b>到货日 > 售罄日</b>，中间就是<b>红色缺货区</b>——你明明卖得动却没货可卖（少赚 + 评分降）。",
-      instruct: "拖【补货提前期】从 140 拉到 160：箭头右移，红色缺口变大；再拖【补货量】看补多少能填平。",
-      observe: "观察：箭头 = 到货日。提前期越长 → 越容易在售罄前到不了。",
+      instruct: "拖【补货提前期】从 140 拉到 160：🔻 绿箭头右移，🟥 红色缺货区变大；再拖【补货量】看补多少能把绿线抬回 0 之上。",
+      observe: "观察 🔻 绿箭头（到货日）和 ▏红竖虚线（售罄日）的前后关系：箭头在红线右边 = 到货太晚 = 中间全是 🟥 缺货区。",
       baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 0, promo: 1, promoDay: 60 },
       demoTarget: { leadTime: 160 },
       dict: [
@@ -134,9 +134,9 @@
         "别等售罄才下单！留个「安全垫」：<b>库存线掉到琥珀虚线就立刻下单</b>。<br>" +
         "<b>琥珀线高度 = 安全天数 × 日销</b>。比如安全 7 天、日销 48 → 线高度 = 336 件。<br>" +
         "它不延长物流，只把<b>下单那一刻提前</b>——箭头跟着提前，缺货区可能消失。",
-      instruct: "拖【安全库存天数】从 7 拉到 30：琥珀线抬高 → 下单提前 → 箭头提前 → 红缺口缩小甚至消失。",
-      observe: "观察：琥珀线 = 警戒线。它的高度 = 安全天数 × 日销。",
-      baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 7, promo: 1, promoDay: 60 },
+      instruct: "拖【安全库存天数】从 14 拉到 30：⚌ 琥珀虚线抬高 → 库存线更早撞到它 → 下单提前 → 🔻 绿箭头左移 → 🟥 红缺口缩小甚至消失。",
+      observe: "观察 ⚌ 琥珀虚线的高度 = 安全天数 × 日销（14 天 × 48 件 = 672 件）。观察 🔻 绿箭头：安全天数越大，箭头越靠左（越早到货）。",
+      baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 14, promo: 1, promoDay: 60 },
       demoTarget: { safetyDays: 30 },
       dict: [
         { k: "⚌ 琥珀虚线", v: "「警戒线」。库存掉到这条线立刻下单。高度 = 安全天数 × 日销。" },
@@ -154,9 +154,9 @@
         "<b>线为啥突然变陡？</b>斜率 = -日销，促销期日销变大 → 斜率绝对值变大 → 线更陡 = <b>尖峰</b>。<br>" +
         "<b>为啥用一条竖虚线标「促销开始」？</b>让你一眼看到「从这里开始斜率变了」。<br>" +
         "光加广告不补货 = 尖峰压垮库存，库存骤降到 0。",
-      instruct: "拖【促销系数】从 1 拉到 2.5：尖峰更高更陡，库存断崖式下跌；再调【促销开始日】看尖峰位置左右移动。",
-      observe: "观察：促销期斜率变陡。光加广告不补货 = 加速断货。",
-      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, replenish: 4000, safetyDays: 21, promo: 1, promoDay: 60 },
+      instruct: "拖【促销系数】从 1.4 拉到 2.5：🟡 尖峰更陡，库存断崖式下跌；再调【促销开始日】看 ▏琥珀竖虚线（= 斜率切换点）左右移动。",
+      observe: "观察 🟡 尖峰：促销开始日之后 📉 绿线突然变陡（斜率 × 促销系数）。观察 ▏琥珀竖虚线：它标出「从这天起线变陡」。",
+      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, replenish: 4000, safetyDays: 21, promo: 1.4, promoDay: 60 },
       demoTarget: { promo: 2.5 },
       dict: [
         { k: "🟡 尖峰", v: "促销期斜率临时放大 = 线突然变陡。日销 × 促销系数。" },
@@ -412,6 +412,19 @@
       ctx.fillText("促销开始", px - 16, padT + 12);
     }
 
+    // 安全库存警戒线（第 6 关起，琥珀横向虚线；高度 = 安全天数 × 日销）
+    if (els.has("safety") && p.safetyDays > 0 && p.demand > 0) {
+      const safeLevel = p.safetyDays * p.demand;
+      if (safeLevel < yMax) {
+        const sy = y(safeLevel);
+        ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([7, 5]); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(padL, sy); ctx.lineTo(padL + plotW, sy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = cssVar("--amber"); ctx.font = "bold 11px sans-serif";
+        ctx.fillText("⚠ 安全线 " + fmt(safeLevel) + " 件（" + p.safetyDays + " 天 × 日销）", padL + 6, sy - 6);
+      }
+    }
+
     // 补货箭头（第 5 关起）
     if (els.has("leadTime") && series.metrics.arrivalDay >= 0 && series.metrics.arrivalDay <= progDay && p.replenish > 0) {
       const ax = x(series.metrics.arrivalDay);
@@ -460,6 +473,7 @@
     if (si >= 6) rows.push(["促销期日销", fmt(state.current.demand * state.current.promo) + " 件/天"]);
     el.innerHTML = `<div class="ro-grid">` + rows.map(([k, v]) =>
       `<div class="ro-cell"><span class="ro-k">${k}</span><span class="ro-v">${v}</span></div>`).join("") + `</div>`;
+    renderLegend(); // 图例跟着参数实时增减（如促销系数拉到 1 尖峰消失，图例也移除）
   }
 
   /* ---------- 滑块（只显示本关及之前解锁的因子）---------- */
@@ -468,6 +482,7 @@
     if (!wrap) return;
     const params = unlockedParams(state.stageIndex);
     wrap.innerHTML = "";
+    state.inputs = {}; // 清掉上一关残留的失效引用（否则 syncSliders 会摸到已拆除的 DOM）
     const newSet = new Set(Array.isArray(STAGES[state.stageIndex].newParam)
       ? STAGES[state.stageIndex].newParam : (STAGES[state.stageIndex].newParam ? [STAGES[state.stageIndex].newParam] : []));
     params.forEach((name) => {
@@ -493,9 +508,10 @@
   function syncSliders() {
     Object.keys(state.inputs).forEach((name) => {
       const input = state.inputs[name];
-      if (!input) return;
+      const lbl = $("labVal_" + name);
+      if (!input || !lbl) return;
       input.value = state.current[name];
-      $("labVal_" + name).textContent = fmt(Number(state.current[name])) + " " + PARAMS[name].unit;
+      lbl.textContent = fmt(Number(state.current[name])) + " " + PARAMS[name].unit;
     });
   }
 
@@ -545,6 +561,117 @@
       ).join("");
   }
 
+  /* ---------- 🧩 动态图例：只列「画布上此刻真实存在」的元素 ---------- */
+  // 每条：icon(形状) / color(CSS 变量) / name / where(图里啥样) / why(为啥这形状) / biz(业务含义) / when(可见条件)
+  const LEGEND = [
+    {
+      icon: "📐", color: "--muted", name: "坐标网格",
+      where: "灰色竖线 + 底部「今天 / 60 天后…」+ 左侧「N 件」刻度",
+      why: "横轴 = 时间（天），纵轴 = 库存（件）——所有元素都画在这个网格上",
+      biz: "看任何经营走势图都先认这两根轴",
+      when: () => true
+    },
+    {
+      icon: "━", color: "--green", name: "库存横线（绿）",
+      where: "一条水平的绿线，横贯全图",
+      why: "还没开始卖 → 库存每天都一样 → 线不上不下 = 横线；高度 = 你有几件",
+      biz: "这是你的「家底」：今天手里的全部货",
+      when: (p, m, si) => si === 0
+    },
+    {
+      icon: "📉", color: "--green", name: "库存斜线（绿）",
+      where: "从左上往右下掉的绿线",
+      why: "每过 1 天库存减「日销」件 → 线向右走 1 格就向下掉一点；斜率 = -日销，线越陡卖越快",
+      biz: "你的货正在一天天变少",
+      when: (p, m, si) => si >= 1
+    },
+    {
+      icon: "▨", color: "--green", name: "绿色填充（有货区）",
+      where: "绿线下方到 0 之间的淡绿色三角形区域",
+      why: "面积 = (1/2)×天数×库存 = 这批货一共卖出的总件数",
+      biz: "填充越大 = 这批货能创造的总销量越多",
+      when: (p, m, si) => si >= 1
+    },
+    {
+      icon: "▏", color: "--red", name: "红竖虚线（售罄日）",
+      where: "一根从上到下的红色竖虚线 + 「售罄 · 第 N 天」标签",
+      why: "竖线能精确标出「那一天」在时间轴的位置——绿线撞到 0 的那天",
+      biz: "过了这天你就没货可卖了",
+      when: (p, m, si) => si >= 2 && m.sellOutDay >= 0
+    },
+    {
+      icon: "🟥", color: "--red", name: "红色缺货区",
+      where: "0 线以下的淡红色区域",
+      why: "库存已经是负数 = 「本来卖得掉却没货」的部分，面积越大损失越大",
+      biz: "少赚的钱 + 断货导致的链接权重下降",
+      when: (p, m, si) => si >= 2 && m.stockoutDays > 0
+    },
+    {
+      icon: "╌", color: "--purple", name: "紫虚线（你的预测）",
+      where: "一条紫色的虚线，和绿线一起往下走",
+      why: "虚线 = 还没发生 = 计划；绿实线 = 真实。两线岔开 = 预测错了",
+      biz: "预测偏低会突然断货；偏高会压仓",
+      when: (p, m, si) => si >= 3
+    },
+    {
+      icon: "🔻", color: "--green", name: "绿箭头（补货到货）",
+      where: "顶部一个绿色向上箭头 + 「+N」件数",
+      why: "箭头指向「到货那一刻」在时间轴的位置 = 下单日 + 提前期",
+      biz: "货从下单到可售要等提前期，等太久就先断货",
+      when: (p, m, si) => si >= 4 && m.arrivalDay >= 0
+    },
+    {
+      icon: "⚌", color: "--amber", name: "琥珀横虚线（安全线）",
+      where: "一条水平的琥珀色虚线 + 「⚠ 安全线 N 件」",
+      why: "高度 = 安全天数 × 日销；绿线掉到这条线 = 立刻下单的信号",
+      biz: "不等售罄才补货，提前下单躲开缺货区",
+      when: (p, m, si) => si >= 5 && p.safetyDays > 0
+    },
+    {
+      icon: "▏", color: "--amber", name: "琥珀竖虚线（促销开始）",
+      where: "促销开始日位置一根琥珀色竖虚线",
+      why: "标出「从这天起斜率切换」——线从这里开始突然变陡",
+      biz: "大促开始的那一刻",
+      when: (p, m, si) => si >= 6 && p.promo > 1
+    },
+    {
+      icon: "🟡", color: "--amber", name: "促销尖峰",
+      where: "竖虚线右侧，绿线突然变陡的那一段",
+      why: "促销期日销 × 促销系数 → 斜率放大 → 更陡 = 尖峰",
+      biz: "光加广告不补货 = 尖峰压垮库存，加速断货",
+      when: (p, m, si) => si >= 6 && p.promo > 1
+    },
+    {
+      icon: "●", color: "--purple", name: "紫色播放头",
+      where: "一键模拟时从左扫到右的紫竖线 + 圆点",
+      why: "标出动画「播到第几天」，圆点吸在当天的库存值上",
+      biz: "带你逐天检查库存怎么变",
+      when: (p, m, si) => si >= 1
+    }
+  ];
+
+  function renderLegend() {
+    const el = $("labLegend");
+    if (!el) return;
+    const si = state.stageIndex;
+    const p = state.current;
+    const m = computeSeries(si).metrics;
+    const items = LEGEND.filter((it) => it.when(p, m, si));
+    el.innerHTML =
+      `<div class="lab-card-title">🧩 图上现在有什么（${items.length} 个元素）</div>` +
+      items.map((it) => {
+        return `<div class="lab-legend-item">` +
+          `<span class="lab-legend-swatch" style="color:var(${it.color})">${it.icon}</span>` +
+          `<span class="lab-legend-body">` +
+            `<span class="lab-legend-name">${it.name}</span>` +
+            `<span class="lab-legend-where">👁 图里啥样：${it.where}</span>` +
+            `<span class="lab-legend-why">🤔 为啥这样画：${it.why}</span>` +
+            `<span class="lab-legend-biz">💼 意味着：${it.biz}</span>` +
+          `</span>` +
+        `</div>`;
+      }).join("");
+  }
+
   /* ---------- 切关 ---------- */
   function applyStage(i) {
     state.stageIndex = (i + STAGES.length) % STAGES.length;
@@ -555,9 +682,10 @@
     $("labLogic").textContent = S.logic;
     $("labStep").textContent = (state.stageIndex + 1) + " / " + STAGES.length;
     $("labTitle").textContent = S.title;
-    $("labIntro").innerHTML = S.intro;
-    $("labInstruct").innerHTML = `<b>怎么拖：</b>${S.instruct}`;
-    $("labObserve").innerHTML = `<b>看什么：</b>${S.observe}`;
+    $("labIntro").innerHTML =
+      `<span class="lab-intro-badge">🧩 本关图上新增：${S.newLabel}</span>` + S.intro;
+    $("labInstruct").innerHTML = S.instruct;
+    $("labObserve").innerHTML = S.observe;
     const next = $("labNext");
     next.textContent = (state.stageIndex === STAGES.length - 1) ? "↺ 回到第 1 关" : "下一步 →";
     renderElements();
@@ -568,7 +696,36 @@
   function demoStage() {
     const S = STAGES[state.stageIndex];
     if (!S.demoTarget) return;
+    if (state.raf) cancelAnimationFrame(state.raf);
+    // 1) 滑块动画滑到 demoTarget（600ms，能看到线跟着参数变）
     Object.keys(S.demoTarget).forEach((k) => setParam(k, S.demoTarget[k], true));
+    // 2) 参数到位后，播放头从今天扫到 180 天后（1.2s）
+    setTimeout(() => {
+      const dur = 1200, t0 = performance.now();
+      state.playing = true;
+      function frame(now) {
+        let pr = (now - t0) / dur; if (pr > 1) pr = 1;
+        state.progress = pr;
+        draw(pr);
+        if (pr < 1) state.raf = requestAnimationFrame(frame);
+        else {
+          state.playing = false; state.progress = 1; draw(1); updateReadout();
+          // 3) 演示完恢复 baseline（方便你自己拖一遍）
+          setTimeout(() => {
+            Object.keys(S.baseline).forEach((k) => {
+              const lbl = $("labVal_" + k);
+              if (state.inputs[k] && lbl) {
+                state.inputs[k].value = S.baseline[k];
+                lbl.textContent = fmt(S.baseline[k]) + " " + PARAMS[k].unit;
+              }
+              state.current[k] = S.baseline[k];
+            });
+            draw(1); updateReadout();
+          }, 800);
+        }
+      }
+      state.raf = requestAnimationFrame(frame);
+    }, 700);
   }
   function nextStage() { applyStage(state.stageIndex + 1); }
 
