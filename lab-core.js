@@ -37,10 +37,10 @@
       intro:
         "先别急——这张图是个「坐标图」。<b>横着</b>（从左到右）是<b>时间</b>，单位「天」；<b>竖着</b>（从下到上）是<b>你手里有几件货</b>。" +
         "今天没开始卖，库存不变，所以是一条<b>横线</b>。横线<b>高度</b> = 你有几件货（值越大线越高）。",
-      instruct: "拖【期初库存】让横线整体上下平移——值越大，线越高；值=0，线贴底。",
+      instruct: "拖【期初库存】让横线<b>明显地</b>上下平移——值越大，线越高；值=0，线贴底（注意 y 轴刻度是固定的 0/3千/6千/9千/12千，线会在这些刻度间上下走）。",
       observe: "观察：横线 = 库存不变。线的高度 = 你有几件货。",
-      baseline: { inventory: 4800, demand: 0, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { inventory: 8000 },
+      baseline: { inventory: 3000, demand: 0, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
+      demoTarget: { inventory: 9000 },
       dict: [
         { k: "📐 坐标图", v: "横=时间(天)，竖=库存(件)。看任何经营指标都靠它。" },
         { k: "━ 横线", v: "高度 = 你有几件货。横着不动 = 库存不变。" }
@@ -264,6 +264,16 @@
   function cssVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
   }
+  // 生成 4 档「好看」刻度（如 yMax=3200 → [0, 1000, 2000, 3000]）
+  function makeTicks(yMax, n) {
+    const step = Math.pow(10, Math.floor(Math.log10(yMax / n)));
+    const nice = [1, 2, 2.5, 5, 10].map((m) => m * step);
+    const s = nice.find((v) => v * (n - 1) >= yMax) || step;
+    const out = [];
+    for (let v = 0; v <= yMax + 0.001; v += s) out.push(Math.round(v));
+    if (out[out.length - 1] < yMax) out.push(Math.round(out[out.length - 1] + s));
+    return out;
+  }
   function resizeCanvas() {
     const c = state.canvas;
     if (!c) return;
@@ -299,11 +309,16 @@
     const inv = series.inv;
     const p = state.current;
 
-    const padL = 56, padR = 16, padT = 22, padB = 30;
+    const padL = 60, padR = 16, padT = 22, padB = 30;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
-    const yMax = Math.max(p.inventory, ...inv, 1);
-    const yMin = Math.min(0, ...inv);
+    // 第 1 关：yMax 固定为 12000（让库存线在固定刻度里上下移动，不被 inventory「顶天」）
+    let yMax, yMin = Math.min(0, ...inv);
+    if (si === 0) {
+      yMax = 12000;
+    } else {
+      yMax = Math.max(p.inventory, ...inv, 1);
+    }
     const x = (d) => padL + (d / HORIZON) * plotW;
     const y = (v) => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
     const zeroY = y(0);
@@ -328,10 +343,16 @@
     }
     ctx.stroke();
 
-    // y 轴刻度（左边的「几件」标签）
+    // y 轴刻度：第 1 关固定 5 档；其他关按 yMax 选 4 档
+    const yTicks = (si === 0) ? [0, 3000, 6000, 9000, 12000] : makeTicks(yMax, 4);
     ctx.fillStyle = cssVar("--muted"); ctx.font = "11px sans-serif"; ctx.textAlign = "right";
-    ctx.fillText(fmt(yMax) + " 件", padL - 6, padT + 10);
-    ctx.fillText("0", padL - 6, zeroY + 4);
+    yTicks.forEach((t) => {
+      if (t > 0) {
+        ctx.strokeStyle = grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(padL, y(t)); ctx.lineTo(padL + plotW, y(t)); ctx.stroke();
+      }
+      ctx.fillText((t >= 1000 ? (t / 1000) + "千" : t) + " 件", padL - 6, y(t) + 4);
+    });
     ctx.textAlign = "left";
 
     // 第 1 关：横线 + 大字标"这是你的家底"（不画填充）
@@ -551,10 +572,25 @@
   }
   function nextStage() { applyStage(state.stageIndex + 1); }
 
-  /* ---------- 一键模拟 ---------- */
-  function play() {
-    if (typeof requestAnimationFrame === "undefined") { draw(1); return; }
+  /* ---------- 一键模拟（自动演示整段：瞬间设到本关关键参数 → 时间扫描 → 回到 baseline）---------- */
+  function autoDemo() {
+    const S = STAGES[state.stageIndex];
     if (state.raf) cancelAnimationFrame(state.raf);
+
+    // 1) 立即把本关关键参数设到 demoTarget（库存线 / 斜率 / 三角形等都瞬间变到位）
+    if (S.demoTarget) {
+      Object.keys(S.demoTarget).forEach((k) => {
+        const v = clamp(S.demoTarget[k], PARAMS[k].min, PARAMS[k].max);
+        if (state.inputs[k]) {
+          state.inputs[k].value = v;
+          $("labVal_" + k).textContent = fmt(v) + " " + PARAMS[k].unit;
+        }
+        state.current[k] = v;
+      });
+    }
+    draw(1); updateReadout();
+
+    // 2) 播放头从今天扫到 180 天后
     const dur = 2400, t0 = performance.now();
     state.playing = true;
     function frame(now) {
@@ -562,7 +598,18 @@
       state.progress = p;
       draw(p);
       if (p < 1) state.raf = requestAnimationFrame(frame);
-      else { state.playing = false; state.progress = 1; draw(1); }
+      else {
+        state.playing = false; state.progress = 1; draw(1); updateReadout();
+        // 3) 演示完恢复 baseline（方便用户继续拖）
+        Object.keys(S.baseline).forEach((k) => {
+          if (state.inputs[k]) {
+            state.inputs[k].value = S.baseline[k];
+            $("labVal_" + k).textContent = fmt(S.baseline[k]) + " " + PARAMS[k].unit;
+            state.current[k] = S.baseline[k];
+          }
+        });
+        draw(1); updateReadout();
+      }
     }
     state.raf = requestAnimationFrame(frame);
   }
@@ -576,7 +623,7 @@
     state.canvas = $("labCanvas");
     if (!state.canvas) return;
     applyStage(0);
-    $("labPlay").addEventListener("click", play);
+    $("labPlay").addEventListener("click", autoDemo);
     $("labReset").addEventListener("click", () => applyStage(state.stageIndex));
     $("labDemo").addEventListener("click", demoStage);
     $("labNext").addEventListener("click", nextStage);
