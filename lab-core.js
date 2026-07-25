@@ -1,6 +1,6 @@
 /* ============================================================
- * lab-core.js — 动画实验室 v2（搭积木式：一个元素一个元素加）
- * 设计：每关只往图上加【一个新元素】，只给当前关相关的滑块。
+ * lab-core.js — 动画实验室 v3（看图说话：每个元素都解释为啥用这个几何形状）
+ * 设计：7 关逐步「长出」图；每关引入 1-2 个新视觉元素 + 解释它的几何含义。
  * 依赖：index.html 中的 #labView / #labCanvas / 引导侧栏节点
  * 主题：复用全局 CSS 变量（--green/--red/--amber/--purple/--ink/--muted/--line）
  * ============================================================ */
@@ -25,92 +25,143 @@
   };
 
   // —— 7 关：每关只新增【一个元素】+【一个因子滑块】——
-  // newParam: 本关新解锁、可拖动的滑块（数组=一次解锁多个耦合因子）
-  // element: 本关新加到图上的视觉元素（累计显示）
+  // element: 本关新加到图上的视觉元素
+  // dict:    本关新引入的"看图词典"术语
   const STAGES = [
     {
-      logic: "库存",
-      title: "先认识：库存是一堆能卖的货",
-      element: null,
+      logic: "坐标系",
+      title: "看图先认坐标系：横着是时间，竖着是库存",
+      element: "axis",
       newParam: ["inventory"],
-      newLabel: "📦 库存本体",
-      intro: "这是你仓库里现在的货量。它现在<b>不动</b>——因为还没开始卖。记住：所有预测和备货，都是为了不让这堆货在你要卖的时候断了。",
-      instruct: "先拖【期初库存】，看左边那根线上下移动。这就是你能卖的「家底」。",
-      observe: "观察：线的高度 = 你手里有几件货。",
+      newLabel: "📐 坐标系",
+      intro:
+        "先别急——这张图是个「坐标图」。<b>横着</b>（从左到右）是<b>时间</b>，单位「天」；<b>竖着</b>（从下到上）是<b>你手里有几件货</b>。" +
+        "今天没开始卖，库存不变，所以是一条<b>横线</b>。横线<b>高度</b> = 你有几件货（值越大线越高）。",
+      instruct: "拖【期初库存】让横线整体上下平移——值越大，线越高；值=0，线贴底。",
+      observe: "观察：横线 = 库存不变。线的高度 = 你有几件货。",
       baseline: { inventory: 4800, demand: 0, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { inventory: 8000 }
+      demoTarget: { inventory: 8000 },
+      dict: [
+        { k: "📐 坐标图", v: "横=时间(天)，竖=库存(件)。看任何经营指标都靠它。" },
+        { k: "━ 横线", v: "高度 = 你有几件货。横着不动 = 库存不变。" }
+      ]
     },
     {
-      logic: "卖出",
-      title: "每天卖出 → 库存一天天消失",
+      logic: "日销",
+      title: "日均销量：库存线为啥从横变斜？",
       element: "demand",
       newParam: ["demand"],
-      newLabel: "📉 每日卖出",
-      intro: "现在开始卖了：每天稳定卖出去一些。看曲线怎么一天天往下掉——这就是「库存消失」。",
-      instruct: "拖【真实日均销量】从 32 拉到 64，看曲线是不是掉得更陡、更早触底。",
-      observe: "观察：日销越大，曲线越陡，库存消失越快。",
-      baseline: { inventory: 4800, demand: 32, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { demand: 64 }
+      newLabel: "📉 每天卖出",
+      intro:
+        "「日均销量」= 平均每天卖几件。先假设每天卖一样多。<br>" +
+        "<b>为啥库存线变斜了？</b>每过 1 天，库存就少「日均销量」件——线每走一格（向右 1 天）就向下掉「日销」件。<br>" +
+        "<b>斜率</b>（线陡不陡）= -日销。日销越大，线越陡。<br>" +
+        "<b>三角形面积</b> = 一共卖出了多少件。三角形 = (1/2) × 底 × 高 = (1/2) × 天数 × 库存 = 全部库存卖光。",
+      instruct: "拖【真实日均销量】从 8 拉到 24：线越来越陡（斜率绝对值变大），三角形面积不变（卖出的总量还是初始库存）。",
+      observe: "观察：日销 ↑ → 斜率更陡 → 售罄更快。三角形面积 = 你能卖的总数。",
+      baseline: { inventory: 4800, demand: 8, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
+      demoTarget: { demand: 32 },
+      dict: [
+        { k: "📉 斜线", v: "每向右 1 天，库存减「日均销量」件。斜率 = -日销。" },
+        { k: "🔺 三角形", v: "斜线 + 横线 + 纵线围成的面积 = 一共卖出几件 = 初始库存。" },
+        { k: "▨ 绿色填充", v: "线下方到 0 的区域 = 「现在有货」覆盖的时间-件数对。" }
+      ]
     },
     {
       logic: "售罄",
-      title: "卖到 0 的那天 = 售罄日",
+      title: "售罄日：库存线撞到 0 的那一天",
       element: "sellout",
       newParam: null,
       newLabel: "🔴 售罄日",
-      intro: "库存掉到 0 的那一天，就是「售罄日」。从今天到售罄，就是这堆货能撑的天数——叫「库存覆盖天数」。",
-      instruct: "再拖【真实日均销量】：拉高它，红色售罄线就往左移（更早断货）；拉低它，售罄线右移。",
-      observe: "观察：红色竖线 = 售罄日。覆盖天数 = 库存 ÷ 日销。",
+      intro:
+        "斜线一路往下掉，撞到 0 那天就是<b>售罄日</b>——你货全卖光了，再往后就没得卖。<br>" +
+        "从今天到售罄日之间的天数 = <b>库存覆盖天数</b> = 库存 ÷ 日销。<br>" +
+        "<b>为啥用一根红色竖线？</b>竖线能精确标出「那一天」在时间轴的哪个位置——一眼看到还能撑多久。",
+      instruct: "再拖【真实日均销量】拉高：红竖线往左移（更早断货）；拉低：红竖线右移（撑更久）。",
+      observe: "观察：红竖线 = 售罄日。覆盖天数 = 库存 / 日销。",
       baseline: { inventory: 4800, demand: 32, forecast: 0, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { demand: 64 }
+      demoTarget: { demand: 64 },
+      dict: [
+        { k: "▏ 红竖线", v: "标记「库存掉到 0」的那一天在时间轴上的位置。" },
+        { k: "📅 覆盖天数", v: "从今天到售罄日 = 库存 ÷ 日销。日销越大覆盖越短。" }
+      ]
     },
     {
       logic: "预测",
-      title: "你的预测 vs 真实：计划线",
+      title: "预测线：你的「计划」vs 真实",
       element: "forecast",
       newParam: ["forecast"],
       newLabel: "🟣 预测线",
-      intro: "你开工前会先「预测」每天能卖多少，紫色虚线是你的<b>计划</b>。如果预测 < 真实，你就会「以为还够」却悄悄断货。",
-      instruct: "拖【预测日均销量】把它从 32 拉到和真实(48)一样。看紫虚线(计划)追上蓝实线(真实)，覆盖天数才准。",
-      observe: "观察：紫虚线=你的预测。预测偏低 = 自欺欺人。",
+      intro:
+        "你开工前会先「预测」每天能卖多少——这就是<b>计划</b>。<br>" +
+        "<b>为啥用虚线？</b>虚线 = 还没发生 = 计划。绿实线 = 真实。<br>" +
+        "如果预测 < 真实：你以为还够，其实已经偷偷断货；两条线分得越开，决策错得越远。",
+      instruct: "拖【预测日均销量】从 32 拉到和真实 48 一样：紫虚线追上绿实线，两线重合 = 计划对得上。",
+      observe: "观察：紫虚线=你的计划。预测偏低 = 自欺欺人；预测偏高 = 备货过多人压仓。",
       baseline: { inventory: 4800, demand: 48, forecast: 32, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { forecast: 48 }
+      demoTarget: { forecast: 48 },
+      dict: [
+        { k: "🟣 紫虚线", v: "「计划」曲线 = 按你预测的日销算出的库存走势。虚线代表还没发生。" },
+        { k: "📊 双线差", v: "紫线低过绿线 = 计划低估了真实需求 → 决策会断货。" }
+      ]
     },
     {
       logic: "补货",
-      title: "提前期：下单后多久才到货",
+      title: "补货提前期：箭头为啥在那一时刻？",
       element: "leadTime",
       newParam: ["leadTime", "replenish"],
       newLabel: "🟢 补货到货",
-      intro: "现实里：库存快没了你要补货，但货从下单到上架要等很久（提前期）。绿色箭头是「到货日」。如果到货日晚于售罄日，中间就是缺货红区。",
-      instruct: "拖【补货提前期】从 140 拉到 160：箭头右移，红色缺货缺口变大。再拖【补货量】看补多少能填平。",
-      observe: "观察：绿色箭头 = 到货日。提前期越长，越容易在售罄前到不了。",
+      intro:
+        "现实里：库存快没了要补货，但货从下单到上架要等很久（<b>提前期</b>）。<br>" +
+        "<b>绿色箭头 = 到货日</b>。箭头下方数字 = 一次补进来几件。<br>" +
+        "如果<b>到货日 > 售罄日</b>，中间就是<b>红色缺货区</b>——你明明卖得动却没货可卖（少赚 + 评分降）。",
+      instruct: "拖【补货提前期】从 140 拉到 160：箭头右移，红色缺口变大；再拖【补货量】看补多少能填平。",
+      observe: "观察：箭头 = 到货日。提前期越长 → 越容易在售罄前到不了。",
       baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { leadTime: 160 }
+      demoTarget: { leadTime: 160 },
+      dict: [
+        { k: "🔻 绿箭头", v: "到货那一刻 = 下单日 + 提前期。箭头下方数字 = 一次补几件。" },
+        { k: "🟥 红缺货区", v: "售罄日到到货日之间 = 零货可卖的天数。最痛的那段。" }
+      ]
     },
     {
       logic: "安全",
-      title: "安全库存：把警戒线提前",
+      title: "安全库存：为啥要提前画一条线？",
       element: "safety",
       newParam: ["safetyDays"],
       newLabel: "🟠 安全库存线",
-      intro: "别等掉到 0 才补——留条安全垫，提前下单。琥珀虚线就是安全库存线，到这条线就该下单了。",
-      instruct: "拖【安全库存天数】从 7 拉到 30：下单提前→箭头提前→红色缺口缩小甚至消失。",
-      observe: "观察：琥珀线 = 安全线。它不延长物流，只把补货触发提前。",
+      intro:
+        "别等售罄才下单！留个「安全垫」：<b>库存线掉到琥珀虚线就立刻下单</b>。<br>" +
+        "<b>琥珀线高度 = 安全天数 × 日销</b>。比如安全 7 天、日销 48 → 线高度 = 336 件。<br>" +
+        "它不延长物流，只把<b>下单那一刻提前</b>——箭头跟着提前，缺货区可能消失。",
+      instruct: "拖【安全库存天数】从 7 拉到 30：琥珀线抬高 → 下单提前 → 箭头提前 → 红缺口缩小甚至消失。",
+      observe: "观察：琥珀线 = 警戒线。它的高度 = 安全天数 × 日销。",
       baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 7, promo: 1, promoDay: 60 },
-      demoTarget: { safetyDays: 30 }
+      demoTarget: { safetyDays: 30 },
+      dict: [
+        { k: "⚌ 琥珀虚线", v: "「警戒线」。库存掉到这条线立刻下单。高度 = 安全天数 × 日销。" },
+        { k: "🛟 缓冲", v: "安全天数越大 → 越早下单 → 越能躲过红缺货区，但会压更多库存。" }
+      ]
     },
     {
       logic: "促销",
-      title: "促销尖峰：瞬间压垮库存",
+      title: "促销尖峰：线为啥突然变陡？",
       element: "promo",
       newParam: ["promo", "promoDay"],
       newLabel: "🟡 促销尖峰",
-      intro: "大促期间销量会猛涨（尖峰）。看第 60 天后的那个凸起——它让库存骤降、售罄大幅提前。",
-      instruct: "拖【促销系数】从 1 拉到 2.5：第 60 天后尖峰更高，库存掉更快。这就为什么大促要提前拉高预测+备货。",
-      observe: "观察：促销期尖峰。光加广告不补货 = 加速缺货。",
+      intro:
+        "大促期间销量会临时放大 N 倍（<b>促销系数</b>，1 表示不促销，2.5 表示日销 × 2.5）。<br>" +
+        "<b>线为啥突然变陡？</b>斜率 = -日销，促销期日销变大 → 斜率绝对值变大 → 线更陡 = <b>尖峰</b>。<br>" +
+        "<b>为啥用一条竖虚线标「促销开始」？</b>让你一眼看到「从这里开始斜率变了」。<br>" +
+        "光加广告不补货 = 尖峰压垮库存，库存骤降到 0。",
+      instruct: "拖【促销系数】从 1 拉到 2.5：尖峰更高更陡，库存断崖式下跌；再调【促销开始日】看尖峰位置左右移动。",
+      observe: "观察：促销期斜率变陡。光加广告不补货 = 加速断货。",
       baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, replenish: 4000, safetyDays: 21, promo: 1, promoDay: 60 },
-      demoTarget: { promo: 2.5 }
+      demoTarget: { promo: 2.5 },
+      dict: [
+        { k: "🟡 尖峰", v: "促销期斜率临时放大 = 线突然变陡。日销 × 促销系数。" },
+        { k: "▏ 琥珀竖虚线", v: "促销开始日 = 斜率「切换」那一刻。把它提前 → 库存要更早备够。" }
+      ]
     }
   ];
 
@@ -130,6 +181,13 @@
     const set = new Set();
     for (let s = 0; s <= i; s++) if (STAGES[s].element) set.add(STAGES[s].element);
     return set;
+  }
+
+  // 每关累计的看图词典
+  function dictFor(i) {
+    const out = [];
+    for (let s = 0; s <= i; s++) (STAGES[s].dict || []).forEach((d) => out.push(d));
+    return out;
   }
 
   const state = {
@@ -179,7 +237,7 @@
       if (invB[t] < 0) stockoutDays++;
     }
 
-    // 预测线（仅第 4 关后）：按预测日销算出的「计划库存曲线」
+    // 预测线（第 4 关后）：按预测日销算出的「计划库存曲线」
     let invF = null;
     if (stageIndex >= 3) {
       invF = new Array(HORIZON + 1).fill(0);
@@ -218,6 +276,18 @@
     state.ctx = c.getContext("2d");
     if (state.ctx) state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
+
+  // 中文时间轴标签：今天 / 60 天后 / 120 天后 / 180 天后
+  function dayLabel(d) {
+    if (d === 0) return "今天";
+    return "第 " + (d + 1) + " 天";   // d=60 → 第 61 天（直觉：60 天后是第 61 天）
+  }
+  // 改：为了更直觉「60 天后」就直接是「60 天后」用别的格式
+  function dayLabelV(d) {
+    if (d === 0) return "今天";
+    return d + " 天后";
+  }
+
   function draw(progress, stageIndex) {
     const c = state.canvas, ctx = state.ctx;
     if (!c || !ctx) return;
@@ -229,7 +299,7 @@
     const inv = series.inv;
     const p = state.current;
 
-    const padL = 46, padR = 14, padT = 16, padB = 26;
+    const padL = 56, padR = 16, padT = 22, padB = 30;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
     const yMax = Math.max(p.inventory, ...inv, 1);
@@ -240,55 +310,58 @@
 
     ctx.clearRect(0, 0, W, H);
 
-    // 网格
+    // 网格 + 时间轴标签（中文）
     const grid = cssVar("--line");
     ctx.strokeStyle = grid; ctx.lineWidth = 1;
     [0, 60, 120, 180].forEach((d) => {
       ctx.beginPath(); ctx.moveTo(x(d), padT); ctx.lineTo(x(d), padT + plotH); ctx.stroke();
-      ctx.fillStyle = cssVar("--muted"); ctx.font = "11px sans-serif";
-      ctx.fillText("D" + d, x(d) - 8, H - 8);
+      ctx.fillStyle = cssVar("--muted"); ctx.font = "11.5px sans-serif";
+      ctx.fillText(dayLabelV(d), x(d) - 14, H - 10);
     });
 
-    // 第 1 关：还没开始卖 → 平静的横线上写大字
+    // 库存线（粗、亮）
+    ctx.strokeStyle = cssVar("--green"); ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    for (let d = 0; d <= HORIZON; d++) {
+      const yy = y(Math.max(inv[d], yMin));
+      if (d === 0) ctx.moveTo(x(d), yy); else ctx.lineTo(x(d), yy);
+    }
+    ctx.stroke();
+
+    // y 轴刻度（左边的「几件」标签）
+    ctx.fillStyle = cssVar("--muted"); ctx.font = "11px sans-serif"; ctx.textAlign = "right";
+    ctx.fillText(fmt(yMax) + " 件", padL - 6, padT + 10);
+    ctx.fillText("0", padL - 6, zeroY + 4);
+    ctx.textAlign = "left";
+
+    // 第 1 关：横线 + 大字标"这是你的家底"（不画填充）
     if (si === 0) {
-      ctx.strokeStyle = cssVar("--green"); ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(x(0), zeroY); ctx.lineTo(x(HORIZON), zeroY); ctx.stroke();
-      ctx.fillStyle = cssVar("--ink"); ctx.font = "bold 15px sans-serif"; ctx.textAlign = "center";
-      ctx.fillText("📦 库存 " + fmt(p.inventory) + " 件 —— 还没开始卖", W / 2, H / 2);
+      ctx.fillStyle = cssVar("--ink"); ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText("━ 这是一条横线，高度 = 你今天有 " + fmt(p.inventory) + " 件货", W / 2, padT + 22);
+      ctx.fillStyle = cssVar("--muted"); ctx.font = "12px sans-serif";
+      ctx.fillText("下面会教：让它一天天掉、撞到 0、撞到之前补货回来……", W / 2, padT + 42);
       ctx.textAlign = "left";
       return;
     }
 
     const progDay = Math.max(0, Math.min(HORIZON, Math.floor(progress * HORIZON)));
 
-    // 安全库存线（第 6 关起）
-    if (els.has("safety")) {
-      const safeLevel = p.safetyDays * p.demand;
-      if (safeLevel <= yMax && safeLevel >= yMin) {
-        ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([5, 4]); ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(padL, y(safeLevel)); ctx.lineTo(padL + plotW, y(safeLevel)); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = cssVar("--amber"); ctx.font = "11px sans-serif";
-        ctx.fillText("安全库存线", padL + 4, y(safeLevel) - 5);
-      }
-    }
-
-    // 绿色有货区
-    ctx.fillStyle = "rgba(23,121,87,0.20)";
+    // 绿色有货区（库存线下方到 0 的填充）
+    ctx.fillStyle = "rgba(23,121,87,0.18)";
     ctx.beginPath(); ctx.moveTo(x(0), zeroY);
     for (let d = 0; d <= progDay; d++) ctx.lineTo(x(d), y(Math.max(inv[d], 0)));
     ctx.lineTo(x(progDay), zeroY); ctx.closePath(); ctx.fill();
 
     // 红色超卖区（第 3 关起）
     if (els.has("sellout")) {
-      ctx.fillStyle = "rgba(184,60,52,0.20)";
+      ctx.fillStyle = "rgba(184,60,52,0.22)";
       ctx.beginPath(); ctx.moveTo(x(0), zeroY);
       for (let d = 0; d <= progDay; d++) ctx.lineTo(x(d), y(Math.min(inv[d], 0)));
       ctx.lineTo(x(progDay), zeroY); ctx.closePath(); ctx.fill();
     }
 
-    // 真实库存曲线
-    ctx.strokeStyle = cssVar("--green"); ctx.lineWidth = 2;
+    // 真实库存曲线（覆盖到 0 之下时改红）
+    ctx.strokeStyle = cssVar("--green"); ctx.lineWidth = 2.4;
     ctx.beginPath();
     for (let d = 0; d <= progDay; d++) {
       const yy = y(inv[d]);
@@ -306,7 +379,7 @@
       }
       ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = cssVar("--purple"); ctx.font = "11px sans-serif";
-      ctx.fillText("你的预测（计划）", padL + plotW - 96, y(series.invF[progDay]) - 6);
+      ctx.fillText("你的预测（计划）", padL + plotW - 100, y(series.invF[progDay]) - 6);
     }
 
     // 促销起点竖线（第 7 关、且 promo>1）
@@ -315,7 +388,7 @@
       ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH); ctx.stroke(); ctx.setLineDash([]);
       ctx.fillStyle = cssVar("--amber"); ctx.font = "11px sans-serif";
-      ctx.fillText("促销开始", px - 12, padT + 12);
+      ctx.fillText("促销开始", px - 16, padT + 12);
     }
 
     // 补货箭头（第 5 关起）
@@ -325,7 +398,7 @@
       ctx.beginPath(); ctx.moveTo(ax, padT + 4); ctx.lineTo(ax, padT + 22); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(ax - 5, padT + 10); ctx.lineTo(ax, padT + 2); ctx.lineTo(ax + 5, padT + 10); ctx.closePath(); ctx.fill();
       ctx.fillStyle = cssVar("--green"); ctx.font = "11px sans-serif";
-      ctx.fillText("+" + fmt(p.replenish), ax - 10, padT + 36);
+      ctx.fillText("+" + fmt(p.replenish), ax - 12, padT + 36);
     }
 
     // 售罄标记（第 3 关起）
@@ -335,7 +408,7 @@
       ctx.beginPath(); ctx.moveTo(sx, padT); ctx.lineTo(sx, padT + plotH); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = cssVar("--red"); ctx.font = "bold 11px sans-serif";
-      ctx.fillText("售罄 D" + series.metrics.sellOutDay, sx - 4, padT + 12);
+      ctx.fillText("售罄 · 第 " + (series.metrics.sellOutDay + 1) + " 天", sx + 4, padT + 12);
     }
 
     // 播放头
@@ -359,9 +432,9 @@
     rows.push(["库存", fmt(state.current.inventory) + " 件"]);
     if (si >= 1) rows.push(["日均销量", fmt(state.current.demand) + " 件/天"]);
     if (si >= 1) rows.push(["库存覆盖", fmt(m.coverDemand) + " 天"]);
-    if (si >= 2) rows.push(["售罄日", m.sellOutDay < 0 ? "不会售罄" : "D" + m.sellOutDay + " 天"]);
+    if (si >= 2) rows.push(["售罄日", m.sellOutDay < 0 ? "不会售罄" : "第 " + (m.sellOutDay + 1) + " 天（还能撑 " + Math.max(0, m.sellOutDay) + " 天）"]);
     if (si >= 3) rows.push(["预测覆盖", fmt(m.coverForecast) + " 天" + (m.coverForecast < m.coverDemand ? " ⚠偏低" : "")]);
-    if (si >= 4) rows.push(["下单日 / 到货日", (m.orderDay >= 0 ? "D" + m.orderDay : "—") + " / " + (m.arrivalDay >= 0 ? "D" + m.arrivalDay : "—")]);
+    if (si >= 4) rows.push(["下单日 / 到货日", (m.orderDay >= 0 ? "第 " + (m.orderDay + 1) + " 天" : "—") + " / " + (m.arrivalDay >= 0 ? "第 " + (m.arrivalDay + 1) + " 天" : "—")]);
     if (si >= 4) rows.push(["缺货天数", m.stockoutDays > 0 ? badge(m.stockoutDays + " 天", "bad") : "0 天"]);
     if (si >= 6) rows.push(["促销期日销", fmt(state.current.demand * state.current.promo) + " 件/天"]);
     el.innerHTML = `<div class="ro-grid">` + rows.map(([k, v]) =>
@@ -439,6 +512,18 @@
     }).join("");
   }
 
+  /* ---------- 看图词典（侧栏底部）---------- */
+  function renderDict() {
+    const el = $("labDict");
+    if (!el) return;
+    const items = dictFor(state.stageIndex);
+    el.innerHTML =
+      `<div class="lab-dict-head">📖 看图词典 · 跟着这一关学的几何</div>` +
+      items.map((d) =>
+        `<div class="lab-dict-row"><span class="lab-dict-k">${d.k}</span><span class="lab-dict-v">${d.v}</span></div>`
+      ).join("");
+  }
+
   /* ---------- 切关 ---------- */
   function applyStage(i) {
     state.stageIndex = (i + STAGES.length) % STAGES.length;
@@ -455,6 +540,7 @@
     const next = $("labNext");
     next.textContent = (state.stageIndex === STAGES.length - 1) ? "↺ 回到第 1 关" : "下一步 →";
     renderElements();
+    renderDict();
     draw(1); updateReadout();
   }
 
