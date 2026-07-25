@@ -203,6 +203,13 @@
     cssH: 0
   };
 
+  // xHorizon 等分成 5 段的网格刻度数组（首尾都是 0 和 horizon）
+  function makeGridSteps(horizon, n) {
+    const out = [];
+    for (let i = 0; i <= n; i++) out.push(Math.round((i / n) * horizon));
+    return out;
+  }
+
   /* ---------- 计算库存序列（按当前关 gate）---------- */
   function computeSeries(stageIndex) {
     const p = state.current;
@@ -312,27 +319,33 @@
     const padL = 60, padR = 16, padT = 22, padB = 30;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
-    // 第 1 关：yMax 固定为 12000（让库存线在固定刻度里上下移动，不被 inventory「顶天」）
+    // 第 1 关：yMax 固定为 12000（让库存线在固定刻度里上下移动）
+    // 其他关：xHorizon 跟着"覆盖天数 × 1.2"动态走（让斜线永远占屏宽 80%，无论日销多少）
     let yMax, yMin = Math.min(0, ...inv);
     if (si === 0) {
       yMax = 12000;
     } else {
       yMax = Math.max(p.inventory, ...inv, 1);
     }
-    const x = (d) => padL + (d / HORIZON) * plotW;
+    // 动态 x 轴范围：让斜线在画布上永远占 ~80% 屏宽
+    const naturalEnd = p.demand > 0 ? Math.ceil(p.inventory / p.demand) + 5 : HORIZON;
+    const xHorizon = si === 0 ? HORIZON : clamp(naturalEnd, 30, HORIZON);
+    const x = (d) => padL + (d / xHorizon) * plotW;
     const y = (v) => padT + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
     const zeroY = y(0);
 
     ctx.clearRect(0, 0, W, H);
 
-    // 网格 + 时间轴标签（中文）
+    // 网格 + 时间轴标签（中文，xHorizon 动态）
     const grid = cssVar("--line");
     ctx.strokeStyle = grid; ctx.lineWidth = 1;
-    [0, 60, 120, 180].forEach((d) => {
+    const gridSteps = (si === 0) ? [0, 60, 120, 180] : makeGridSteps(xHorizon, 5);
+    gridSteps.forEach((d) => {
       ctx.beginPath(); ctx.moveTo(x(d), padT); ctx.lineTo(x(d), padT + plotH); ctx.stroke();
-      ctx.fillStyle = cssVar("--muted"); ctx.font = "11.5px sans-serif";
-      ctx.fillText(dayLabelV(d), x(d) - 14, H - 10);
+      ctx.fillStyle = cssVar("--muted"); ctx.font = "11.5px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(dayLabelV(d), x(d), H - 10);
     });
+    ctx.textAlign = "left";
 
     // 库存线（粗、亮）
     ctx.strokeStyle = cssVar("--green"); ctx.lineWidth = 2.4;
@@ -389,6 +402,21 @@
       if (d === 0) ctx.moveTo(x(d), yy); else ctx.lineTo(x(d), yy);
     }
     ctx.stroke();
+
+    // 斜线中点 + 终点 教学标签（第 2 关/日销，让"日销 = 斜率"一眼可见）
+    if (si === 1 && progDay > 10 && p.demand > 0) {
+      const sellout = Math.floor(p.inventory / p.demand);
+      const midDay = Math.min(Math.floor(sellout / 2), progDay);
+      const midX = x(midDay), midY = y(inv[midDay]);
+      // 斜率标签（在线中点上方）
+      ctx.fillStyle = cssVar("--green"); ctx.font = "bold 12.5px sans-serif"; ctx.textAlign = "left";
+      ctx.fillText("斜率 = 每天少 " + p.demand + " 件", midX - 30, midY - 8);
+      // 三角形面积标签
+      const totalSold = sellout * p.demand;
+      ctx.fillStyle = cssVar("--ink"); ctx.font = "11.5px sans-serif";
+      ctx.fillText("🔺 共卖 " + fmt(totalSold) + " 件 = (1/2) × " + sellout + " 天 × " + fmt(p.inventory) + " 件", midX - 30, midY - 22);
+      ctx.textAlign = "left";
+    }
 
     // 预测线（第 4 关起，虚线）
     if (els.has("forecast") && series.invF) {
