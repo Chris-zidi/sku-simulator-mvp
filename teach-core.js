@@ -462,16 +462,30 @@
   function switchTab(which) {
     const teach = $("teachView");
     const sand = $("sandboxView");
-    const tb = $("tabTeach"), sb = $("tabSandbox");
-    if (which === "teach") {
-      teach.hidden = false; sand.hidden = true;
-      tb.classList.add("on"); sb.classList.remove("on");
-      state.view = "home"; renderHome();
-    } else {
-      if (!sandboxUnlocked()) { renderSandboxLock(); return; }
-      teach.hidden = true; sand.hidden = false;
-      sb.classList.add("on"); tb.classList.remove("on");
+    const lab = $("labView");
+    const tb = $("tabTeach"), sb = $("tabSandbox"), lb = $("tabLab");
+    if (teach) teach.hidden = true;
+    if (sand) sand.hidden = true;
+    if (lab) lab.hidden = true;
+    if (tb) tb.classList.remove("on");
+    if (sb) sb.classList.remove("on");
+    if (lb) lb.classList.remove("on");
+    if (which === "lab") {
+      if (lab) lab.hidden = false;
+      if (lb) lb.classList.add("on");
+      if (window.LabCore && window.LabCore.onShow) window.LabCore.onShow();
+      return;
     }
+    if (which === "teach") {
+      if (teach) teach.hidden = false;
+      if (tb) tb.classList.add("on");
+      state.view = "home"; renderHome();
+      return;
+    }
+    // sandbox
+    if (!sandboxUnlocked()) { renderSandboxLock(); return; }
+    if (sand) sand.hidden = false;
+    if (sb) sb.classList.add("on");
   }
 
   function renderSandboxLock() {
@@ -595,10 +609,11 @@
     const header = document.querySelector("header .header-inner");
     const bar = document.createElement("nav");
     bar.className = "tabbar";
-    bar.innerHTML = `<button id="tabTeach" class="on">📚 教学训练</button><button id="tabSandbox">🧪 自由沙盘</button>`;
+    bar.innerHTML = `<button id="tabTeach" class="on">📚 教学训练</button><button id="tabSandbox">🧪 自由沙盘</button><button id="tabLab">🎬 动画实验室</button>`;
     header.parentNode.insertBefore(bar, header.nextSibling);
     $("tabTeach").addEventListener("click", () => switchTab("teach"));
     $("tabSandbox").addEventListener("click", () => switchTab("sandbox"));
+    $("tabLab").addEventListener("click", () => switchTab("lab"));
     // 把原 main 标记为沙盘视图
     const main = document.querySelector("main");
     if (main && !main.id) main.id = "sandboxView";

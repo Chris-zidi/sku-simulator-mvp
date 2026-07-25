@@ -22,6 +22,23 @@
 
 ## 版本记录
 
+### v0.6.0 - 2026-07-26
+
+状态：新增「🎬 动画实验室」Tab——Forecast 可视化教学（库存消失 / 卖完 / 超卖 / 补货 / 安全库存 / 促销 / Q4 的动画与引导式拖动学习）
+
+变更：
+
+- **新增第三个 Tab「动画实验室」**：在 `teach-core.js` 的 `switchTab` 改为三态（teach / sandbox / lab），`init` 注入 `tabLab` 按钮与点击事件；`index.html` 在 `</main>` 后新增 `<section id="labView" hidden>` 占位，`<script src="lab-core.js">` 在底部加载。
+- **库存曲线动画引擎（`lab-core.js`）**：`computeSeries` 算 180 天库存序列、售罄日、缺货天数、下单日、到货日、计划/真实覆盖天数；Canvas 绘制绿=有货、红=超卖区、琥珀虚线=安全库存线、绿上箭头=补货到货、红竖线=售罄日、紫色播放头；「一键模拟」用 `requestAnimationFrame` 逐天播放；`resizeCanvas` 用 devicePixelRatio 适配并支持主题变量读取。
+- **八参数可拖动联动**：预测/真实日均销量、期初库存、补货提前期、安全库存天数、补货量、促销系数、促销开始日；拖动即时重绘并更新读数面板（售罄日/缺货天数/下单·到货日/计划·真实覆盖/期末库存）。
+- **引导式分步教学（7 课）**：库存消失 / 预测≠真实 / 超卖 / 补货 Lead Time / 安全库存 / 促销尖峰 / Q4 大胆预测；每课设基线参数、只高亮该拖的滑块、给「从哪拖到哪」指令 + 观察提示 + 引用锚点（指标-/攻略P-）、配「看演示」自动拖动；「下一步」循环切换。
+- **测试**：新增 `verify_lab.js`（jsdom 烟雾，9 项断言：8 滑块生成、7 课切换、拖动联动、演示/重置无报错）；`node --check` 通过 `lab-core.js` / `teach-core.js`。
+
+遗留 / 下一步：
+
+- 令牌推送：GitHub 细粒度 PAT 当前为只读（Contents=Read），`git push` 仍 403；需用户在 GitHub 把该令牌 Contents 改为 Read and write 后我方可自动推送（沙箱凭据已存于 `~/.git-credentials`）。
+- 可选 Module D（导入真实 Govee xlsx 动态生成预设）与 Module E（周报/数据条工具网页化）仍待排期。
+
 ### v0.5.0 - 2026-07-24
 
 状态：教学 / 场景 / 指标全面真实化（基于《独立站运营资料》+ Govee 真实周报数据，v0.5 的地基版本）
