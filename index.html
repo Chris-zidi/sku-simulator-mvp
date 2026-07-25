@@ -944,54 +944,73 @@
       .v5-panels > .section:nth-child(4) { grid-column: 1 / -1; }
     }
 
-    /* ===== 动画实验室（v0.6） ===== */
-    #labView { max-width: 1100px; margin: 0 auto; padding: 8px 16px 60px; }
+    /* ===== 动画实验室（v0.10：舞台钉死视口，右侧独立滚动） ===== */
+    :root { --header-h: 118px; }
+    #labView { max-width: 1440px; margin: 0 auto; padding: 0 16px; height: calc(100vh - var(--header-h)); overflow: hidden; }
     #labView[hidden] { display: none; }
-    .lab-wrap { margin-top: 8px; }
-    .lab-head h1 { font-size: 24px; margin: 6px 0 6px; }
-    .lab-head p { color: var(--ink-soft); line-height: 1.6; margin: 0 0 14px; }
-    .lab-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
-    .lab-stage { position: sticky; top: 0; align-self: start; height: calc(100vh - 24px); display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
+    .lab-wrap { height: 100%; }
+    .lab-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; height: 100%; padding: 10px 0; }
+    /* --- 左：舞台（永不滚动，永远完整可见） --- */
+    .lab-stage { height: 100%; display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-width: 0; min-height: 0; overflow: hidden; }
+    .lab-stage-top { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: 8px; flex-wrap: wrap; }
+    .lab-logic { background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; flex-shrink: 0; }
+    .lab-step { font-size: 12px; color: var(--muted); flex-shrink: 0; }
     .lab-canvas-box { flex: 1; min-height: 0; min-width: 0; display: flex; }
-    .lab-canvas-box canvas { width: 100%; height: 100%; min-height: 380px; display: block; border-radius: 10px; background: var(--surface-2); }
-    .lab-readout { margin-top: 10px; flex-shrink: 0; }
+    .lab-canvas-box canvas { width: 100%; height: 100%; display: block; border-radius: 10px; background: var(--surface-2); }
+    .lab-playbar { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-shrink: 0; }
+    .lab-playbar button { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; flex-shrink: 0; }
+    .lab-playbar input[type=range] { flex: 1; accent-color: var(--accent); }
+    .lab-playbar .lab-day-label { font-size: 12px; color: var(--muted); width: 74px; text-align: right; flex-shrink: 0; }
+    .lab-readout { margin-top: 8px; flex-shrink: 0; }
     .ro-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
     .ro-cell { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px; }
     .ro-k { display: block; font-size: 10.5px; color: var(--muted); }
     .ro-v { display: block; font-size: 13.5px; font-weight: 700; margin-top: 1px; }
     .ro-v small { font-size: 9.5px; color: var(--muted); font-weight: 400; }
     .ro-badge.bad { color: var(--red); }
-    .lab-actions { display: flex; gap: 8px; margin-top: 10px; flex-shrink: 0; }
+    .lab-actions { display: flex; gap: 8px; margin-top: 8px; flex-shrink: 0; }
     .lab-actions .primary-btn { flex: 1; min-width: 0; }
     .lab-actions .ghost-btn { flex: 1; min-width: 0; }
-    .lab-side { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; position: sticky; top: 0; height: calc(100vh - 24px); overflow-y: auto; }
-    .lab-lesson-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .lab-logic { background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
-    .lab-step { font-size: 12px; color: var(--muted); }
-    .lab-side h2 { font-size: 18px; margin: 4px 0 10px; line-height: 1.4; }
-    .lab-instruct { font-size: 13.5px; line-height: 1.7; color: var(--ink); background: var(--surface-2); border-radius: 10px; padding: 12px; }
-    .lab-ref { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--accent); }
-    .lab-observe { font-size: 13.5px; line-height: 1.7; color: var(--ink-soft); margin: 10px 0; padding-left: 2px; }
-    .lab-ctrl { display: flex; gap: 10px; margin: 6px 0 14px; }
-    .lab-ctrl .primary-btn { flex: 1; }
-    .lab-params { display: grid; gap: 12px; margin-top: 6px; }
-    .lab-field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; transition: box-shadow .25s, border-color .25s; }
+    /* --- 右：侧栏（顶部固定操作区 + 下方独立滚动讲解区） --- */
+    .lab-side { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+    .lab-side-fixed { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; flex-shrink: 0; margin-bottom: 10px; }
+    .lab-side-fixed h2 { font-size: 16px; margin: 2px 0 10px; line-height: 1.4; }
+    .lab-elements { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+    .lab-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); white-space: nowrap; transition: all .2s; }
+    .lab-chip.done { color: var(--ink-soft); border-color: var(--green); opacity: .92; }
+    .lab-chip.current { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 0 3px var(--accent-soft); }
+    .lab-chip.locked { color: var(--muted); opacity: .5; cursor: help; }
+    .lab-nodecard { font-size: 12.5px; line-height: 1.65; color: var(--ink); background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .lab-nodecard b { color: var(--ink); }
+    .lab-nodecard .lab-nodecard-title { display: block; font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .lab-params { display: grid; gap: 10px; margin-top: 2px; }
+    .lab-field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; transition: box-shadow .25s, border-color .25s; }
     .lab-field.glow { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
     .lab-field-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
     .lab-field-top label { font-size: 13px; font-weight: 600; }
     .lab-val { font-size: 13px; font-weight: 700; color: var(--accent); }
     .lab-note { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
     .lab-field input[type=range] { width: 100%; accent-color: var(--accent); }
+    .lab-nav { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+    .lab-nav button { font-size: 13px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
+    .lab-nav .primary-btn, .lab-nav .ghost-btn { flex: 1; min-width: 90px; padding: 8px 10px; }
+    .lab-nav button.icon-only { flex: 0 0 auto; min-width: 0; padding: 8px 12px; }
+    .lab-nav button:disabled { opacity: .4; cursor: not-allowed; }
+    .lab-scroll { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
     .lab-hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin: 12px 0 0; border-top: 1px dashed var(--line); padding-top: 10px; }
-    /* ===== v0.9 侧栏卡片化 ===== */
-    .lab-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+    /* ===== 侧栏可折叠卡片 ===== */
+    .lab-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 0; margin-bottom: 10px; overflow: hidden; }
+    .lab-card > summary { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.5px; padding: 10px 14px; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+    .lab-card > summary::-webkit-details-marker { display: none; }
+    .lab-card > summary::before { content: "▸"; display: inline-block; transition: transform .15s; }
+    .lab-card[open] > summary::before { transform: rotate(90deg); }
+    .lab-card > summary ~ * { padding: 0 14px 12px; }
     .lab-card-title { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.5px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
-    .lab-card .lab-intro { background: none; padding: 0; margin: 0; }
-    .lab-card .lab-instruct { background: none; padding: 0; }
-    .lab-card .lab-observe { margin: 4px 0 0; padding-left: 0; }
-    .lab-card .lab-ctrl { margin: 12px 0; }
-    .lab-card .lab-params { margin-top: 4px; }
     .lab-intro-badge { display: block; font-size: 12px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+    .lab-intro { font-size: 13px; line-height: 1.7; color: var(--ink-soft); }
+    .lab-intro b { color: var(--ink); }
+    .lab-instruct { font-size: 13px; line-height: 1.7; color: var(--ink); }
+    .lab-observe { font-size: 13px; line-height: 1.7; color: var(--ink-soft); margin: 8px 0 0; }
     .lab-legend-item { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); }
     .lab-legend-item:last-child { border-bottom: none; padding-bottom: 2px; }
     .lab-legend-swatch { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; background: var(--surface); border: 2px solid currentColor; flex-shrink: 0; }
@@ -1000,24 +1019,22 @@
     .lab-legend-where { display: block; font-size: 11.5px; color: var(--ink-soft); line-height: 1.55; }
     .lab-legend-why { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.55; margin-top: 2px; }
     .lab-legend-biz { display: block; font-size: 11.5px; color: var(--accent); line-height: 1.55; margin-top: 3px; font-weight: 600; }
-    .lab-dict { margin-top: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+    .lab-dict { margin-top: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
     .lab-dict-head { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 6px; letter-spacing: 0.2px; }
     .lab-dict-row { display: grid; grid-template-columns: 88px 1fr; gap: 8px; font-size: 12px; line-height: 1.55; padding: 3px 0; border-top: 1px dashed var(--line); }
     .lab-dict-row:first-of-type { border-top: 0; }
     .lab-dict-k { color: var(--ink); font-weight: 600; white-space: nowrap; }
     .lab-dict-v { color: var(--ink-soft); }
-    .lab-elements { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
-    .lab-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); white-space: nowrap; transition: all .2s; }
-    .lab-chip.done { color: var(--ink-soft); border-color: var(--green); opacity: .92; }
-    .lab-chip.current { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 0 3px var(--accent-soft); }
-    .lab-intro { font-size: 13.5px; line-height: 1.7; color: var(--ink-soft); background: var(--accent-soft); border-radius: 10px; padding: 12px; margin: 8px 0 12px; }
-    .lab-intro b { color: var(--ink); }
     .lab-new { display: inline-block; font-size: 10px; background: var(--accent); color: #fff; border-radius: 6px; padding: 1px 6px; margin-left: 4px; vertical-align: middle; }
     .ghost-btn { font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
     .ghost-btn:active { transform: translateY(1px); }
-    @media (max-width: 860px) {
-      .lab-grid { grid-template-columns: 1fr; }
-      .lab-side { position: static; }
+    .lab-demo-badge { position: absolute; top: 8px; left: 8px; background: rgba(120,90,255,.9); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; pointer-events: none; }
+    @media (max-width: 999px) {
+      #labView { height: auto; overflow: visible; padding: 0 12px 40px; }
+      .lab-grid { grid-template-columns: 1fr; height: auto; }
+      .lab-stage { height: 55vh; min-height: 340px; }
+      .lab-side { height: auto; }
+      .lab-scroll { max-height: 60vh; }
       .ro-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
@@ -1403,14 +1420,23 @@
 
     <section id="labView" hidden>
       <div class="lab-wrap">
-        <div class="lab-head">
-          <h1>🎬 动画实验室 · Forecast 可视化</h1>
-          <p>一个元素一个元素往上加：先认识库存，再看它怎么一天天消失、怎么卖完、怎么超卖；拖动参数亲手试，跟着引导一个概念一个概念搞懂。</p>
-        </div>
         <div class="lab-grid">
           <div class="lab-stage">
-            <div class="lab-canvas-box">
+            <div class="lab-stage-top">
+              <span class="lab-logic" id="labLogic">库存</span>
+              <span class="lab-step" id="labStep">1 / 7</span>
+              <div class="lab-elements" id="labElements"></div>
+            </div>
+            <div class="lab-canvas-box" style="position:relative">
               <canvas id="labCanvas"></canvas>
+              <span class="lab-demo-badge" id="labDemoBadge" hidden>▶ 演示中（参数已临时改动）</span>
+            </div>
+            <div class="lab-playbar" id="labPlaybar">
+              <button id="labPlayPause" title="暂停/继续">⏸</button>
+              <button id="labStepBack" title="后退一天">◀</button>
+              <input type="range" id="labScrub" min="0" max="180" step="1" value="180">
+              <button id="labStepFwd" title="前进一天">▶</button>
+              <span class="lab-day-label" id="labDayLabel">第 180 天</span>
             </div>
             <div class="lab-readout" id="labReadout"></div>
             <div class="lab-actions">
@@ -1419,38 +1445,39 @@
             </div>
           </div>
           <aside class="lab-side">
-            <div class="lab-lesson-head">
-              <span class="lab-logic" id="labLogic">库存</span>
-              <span class="lab-step" id="labStep">1 / 7</span>
-            </div>
-            <div class="lab-elements" id="labElements"></div>
-            <h2 id="labTitle"></h2>
-
-            <!-- ① 本关学啥 -->
-            <div class="lab-card">
-              <div class="lab-card-title">📚 本关学啥</div>
-              <div class="lab-intro" id="labIntro"></div>
-            </div>
-
-            <!-- ② 图上现在有什么（动态图例，跟画布一一对应） -->
-            <div class="lab-card lab-legend" id="labLegend"></div>
-
-            <!-- ③ 怎么操作 -->
-            <div class="lab-card">
-              <div class="lab-card-title">🎮 怎么拖</div>
-              <div class="lab-instruct" id="labInstruct"></div>
-              <div class="lab-card-title" style="margin-top:12px">👀 看什么变化</div>
-              <div class="lab-observe" id="labObserve"></div>
-              <div class="lab-ctrl">
+            <div class="lab-side-fixed">
+              <h2 id="labTitle"></h2>
+              <div class="lab-nodecard" id="labNodeCard"></div>
+              <div class="lab-params" id="labParams"></div>
+              <div class="lab-nav">
+                <button class="icon-only" id="labUndo" title="撤销 Ctrl+Z">↶</button>
+                <button class="icon-only" id="labRedo" title="重做 Ctrl+Shift+Z">↷</button>
+                <button class="ghost-btn" id="labPrev">← 上一步</button>
                 <button class="ghost-btn" id="labDemo">▶ 看演示</button>
                 <button class="primary-btn" id="labNext">下一步 →</button>
               </div>
-              <div class="lab-params" id="labParams"></div>
             </div>
+            <div class="lab-scroll">
+              <!-- ① 本关学啥 -->
+              <details class="lab-card" open>
+                <summary>📚 本关学啥</summary>
+                <div class="lab-intro" id="labIntro"></div>
+              </details>
 
-            <!-- ④ 几何词典（通用词汇，可回看） -->
-            <div class="lab-dict" id="labDict"></div>
-            <p class="lab-hint">搭积木式：图是一步步「长」出来的——每关只加一个新元素，只让你动当前关的滑块。先看演示、再自己拖一遍，观察曲线和读数怎么变，懂了再点「下一步」。</p>
+              <!-- ② 图上现在有什么（动态图例，跟画布一一对应） -->
+              <details class="lab-card lab-legend" id="labLegend" open></details>
+
+              <!-- ③ 怎么操作 -->
+              <details class="lab-card">
+                <summary>🎮 怎么拖 / 👀 看什么变化</summary>
+                <div class="lab-instruct" id="labInstruct"></div>
+                <div class="lab-observe" id="labObserve"></div>
+              </details>
+
+              <!-- ④ 几何词典（通用词汇，可回看） -->
+              <div class="lab-dict" id="labDict"></div>
+              <p class="lab-hint">搭积木式：图是一步步「长」出来的——每关只加一个新元素，只让你动当前关的滑块。先看演示、再自己拖一遍，观察曲线和读数怎么变，懂了再点「下一步」。支持 Ctrl+Z 撤销 / Ctrl+Shift+Z 重做。</p>
+            </div>
           </aside>
         </div>
       </div>
