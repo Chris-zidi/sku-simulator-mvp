@@ -22,6 +22,39 @@
 
 ## 版本记录
 
+### v0.5.0 - 2026-07-24
+
+状态：教学 / 场景 / 指标全面真实化（基于《独立站运营资料》+ Govee 真实周报数据，v0.5 的地基版本）
+
+变更：
+
+- **教学章节全面真实化（Module A）**：重写 `teach-data.js` 全部 11 章，嵌入 Govee 真实方法论与引用锚点——`forecast 攻略 P1–P8`（线下先行→ERP / 高库存拉高预测 / 新品从上市日 / 走物流拉到货 / 承压加 AS / Q4 大胆敢预测 / 畅销品预测到清完日）、`业务逻辑.jpg`（首单 SOP、目标正推倒推）、`指标逻辑.jpg`（GMV=CR×AOV×Session、成本五口子、ROI=销售额/广告花费）；
+- **真实场景预设（Module B）**：自由沙盘预设从 3 个扩到 5 个——`eu-stable`(EU 稳定) / `uk-bf`(UK 黑五) / `new-launch`(新品首单) / `eol-clear`(EOL 清库) / `promo-defend`(促销防守)；数值区间锚定 Govee 真实日销分布（UK 30 天日均中位数 32、range 1–871；EU 30 天日均中位数 46、n=297；UK 含黑五日均 / PFD 日均 sheet；EU+UK 各 1105 MSKU）；
+- **完整指标体系（Module C）**：沙盘新增 `v0.5 经营进阶` 四大面板（HTML + `enrichResult()` + `renderV5()` + CSS）：
+  1. GMV 拆解：GMV=CR×AOV×Session，AOV=单价×连单率，Session 六路流量（Google/FB/AFF/Bing/Organic/Direct）占比条形可视化；
+  2. 成本结构（指标逻辑五口子）：采购价/GMV、头程（多海运少空运）、尾程（派等单）、营销（AS 控 ROI）、其它（仓储/平台/风控/关税）、收单，按 GMV 占比估算并与贡献利润并列交叉验证；
+  3. ROI 与复购：ROI=销售额÷广告花费（P6 该涨就涨但要盯 ROI）；复购率=积分/EDM/售后流量贡献的长期 GMV；
+  4. 综合经营评分：GMV 25% + 贡献利润 25% + 库存健康 20% + 缺货控制 15% + Forecast 准确 10% + 价格健康 5%（handoff 第 13 节六维加权公式），六维条 + 总评颜色分级；
+- 预设体系升级：新增 `aovMultiplier`(连单率)、`repurchaseRate`(复购率) 两个滑块输入 + `v5` 配置（traffic 六路占比 / cr / costRates 五口子费率 / note）；`currentPresetName` 跟踪当前场景用于面板标签；
+- 烟雾测试升级：新增 `verify_v05.js`（54 项断言），覆盖 5 预设切换、四大面板渲染、无运行时错误。
+
+验证：
+
+- `verify_v05.js`（jsdom 真实 DOM）：app 初始化成功、5 个预设逐个切换无抛错、GMV/Session/成本合计/ROI/复购 GMV/评分标签均被填充（非 `—`）、成本行=6/评分行=6/流量图例=6、无 jsdom 运行时错误；结果 **54 passed, 0 failed**；
+- 评分合理性抽查：eol-clear 综合 47.6 分 < promo-defend 83.3 分，符合预期；
+- `node --check` 对 `index.html` 内联脚本与 `teach-data.js` 语法检查通过（测试以真实文件加载，等价于运行期校验）。
+
+Git：
+
+- 本地提交：v0.5.0 教学/场景/指标全面真实化；
+- 同步：CloudStudio 重新部署为公开可访问 URL；GitHub 经 `git push origin master:main`（沙箱凭据可用，非交互推送）。
+
+遗留问题 / 下一步：
+
+- 真实浏览器视觉与交互验收仍未完成（沙箱无法打开本地文件浏览器）；建议本机用 1440×900 / 820×1180(iPad) / 390×844(手机) 三档目检一次 v0.5 新面板；
+- **Module D（导入真实 Govee xlsx 进模拟器，动态生成预设/对比）** 与 **Module E（把 weekly_report_calculator / 手动弄数据条 两个 .exe 工具网页化，每周复用）** 已规划，依赖本版真实指标体系地基，待后续排期；
+- 180 天时间口径、库存耗尽节点语义、图表边界等已知风险仍待处理（见 README 接手风险 1/2/4）。
+
 ### v0.4.0 - 2026-07-25
 
 状态：从「纯模拟器」升级为「判断训练系统」（产品差异化核心）

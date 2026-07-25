@@ -877,6 +877,73 @@
       * { transition: none !important; }
     }
 
+    /* ===== v0.5 经营进阶面板 ===== */
+    .v5-panels { display: grid; gap: 16px; }
+
+    .v5-kpi-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+    .v5-kpi {
+      flex: 1 1 118px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 11px 12px;
+      display: flex; flex-direction: column; gap: 2px;
+      min-width: 0;
+    }
+    .v5-kpi span { font-size: 11px; color: var(--muted); }
+    .v5-kpi strong { font-size: 18px; font-weight: 800; line-height: 1.2; word-break: break-all; }
+    .v5-kpi small { font-size: 10px; color: var(--muted); }
+
+    .traffic-bar-wrap { margin-top: 14px; }
+    .traffic-bar {
+      display: flex; gap: 2px; height: 16px;
+      border-radius: 999px; overflow: hidden; background: var(--surface-2);
+    }
+    .traffic-bar span { display: block; height: 100%; border-radius: 0; }
+    .traffic-bar span:first-child { border-radius: 999px 0 0 999px; }
+    .traffic-bar span:last-child { border-radius: 0 999px 999px 0; }
+    .traffic-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 9px; font-size: 11px; color: var(--muted); }
+    .traffic-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .traffic-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+
+    .cost-rows, .score-rows { display: grid; gap: 0; }
+    .cost-row, .score-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) auto auto;
+      grid-template-areas: "name amt rate" "bar bar bar";
+      gap: 5px 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .cost-row:last-child, .score-row:last-child { border-bottom: 0; }
+    .cost-name, .score-name { grid-area: name; min-width: 0; }
+    .cost-name small, .score-name small { display: block; color: var(--muted); font-size: 10px; margin-top: 2px; }
+    .cost-amt { grid-area: amt; text-align: right; font-weight: 800; white-space: nowrap; }
+    .cost-rate { grid-area: rate; text-align: right; color: var(--muted); width: 46px; white-space: nowrap; }
+    .cost-bar { grid-area: bar; height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+    .cost-bar span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+
+    .score-val { grid-area: amt; text-align: right; font-weight: 800; font-size: 15px; white-space: nowrap; }
+    .score-weighted { grid-area: rate; text-align: right; color: var(--muted); font-size: 11px; width: 56px; white-space: nowrap; }
+    .score-bar { grid-area: bar; height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+    .score-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--blue), var(--accent)); border-radius: 999px; }
+
+    .cost-totals {
+      display: flex; justify-content: space-between; gap: 12px;
+      margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--line);
+      font-size: 13px;
+    }
+    .cost-totals strong { font-weight: 800; }
+
+    @media (min-width: 1100px) {
+      .v5-panels {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+      }
+      .v5-panels > .section:nth-child(1),
+      .v5-panels > .section:nth-child(4) { grid-column: 1 / -1; }
+    }
+
   </style>
 </head>
 <body>
@@ -922,9 +989,11 @@
           </div>
 
           <div class="preset-row">
-            <button class="preset-btn active" data-preset="stable">稳定款</button>
-            <button class="preset-btn" data-preset="promo">大促款</button>
-            <button class="preset-btn" data-preset="slow">积压款</button>
+            <button class="preset-btn active" data-preset="eu-stable">EU 稳定</button>
+            <button class="preset-btn" data-preset="uk-bf">UK 黑五</button>
+            <button class="preset-btn" data-preset="new-launch">新品首单</button>
+            <button class="preset-btn" data-preset="eol-clear">EOL 清库</button>
+            <button class="preset-btn" data-preset="promo-defend">促销防守</button>
           </div>
 
           <div class="control-group">
@@ -1008,6 +1077,28 @@
               </div>
             </div>
             <span class="field-note">备货提前期 = 备货间隔 + 采购LT + 提货 + 物流 + 上架；P0 普船参考 140 天（含安全库存 21）。</span>
+          </div>
+
+          <div class="control-group">
+            <div class="section-title" style="margin-bottom:10px">
+              <h3 style="font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.3px">v0.5 · 经营进阶（连单率 / 复购率）</h3>
+            </div>
+            <div class="field">
+              <div class="field-top">
+                <label for="aovMultiplier">连单率（AOV = ASP × 连单率）</label>
+                <span class="field-value" id="aovMultiplierValue"></span>
+              </div>
+              <input id="aovMultiplier" type="range" min="1.0" max="2.0" step="0.01">
+              <span class="field-note">指标逻辑：AOV = ASP × 连单率（bundle / 多件折扣 / Buy X Get Y / DreamView）</span>
+            </div>
+            <div class="field">
+              <div class="field-top">
+                <label for="repurchaseRate">复购率（积分 / EDM / 售后流量）</label>
+                <span class="field-value" id="repurchaseRateValue"></span>
+              </div>
+              <input id="repurchaseRate" type="range" min="0" max="0.4" step="0.01">
+              <span class="field-note">业务逻辑：复购率 = 积分体系 + EDM 再营销 + 售后流量，长期 GMV 的稳定器</span>
+            </div>
           </div>
 
           <div class="control-group">
@@ -1128,6 +1219,74 @@
             </div>
           </section>
 
+          <div class="v5-panels">
+            <!-- GMV 拆解 -->
+            <section class="panel section">
+              <div class="section-title">
+                <div>
+                  <h2>v0.5 · GMV 拆解（指标逻辑）</h2>
+                  <p>GMV = CR × AOV × Session；Session 分 Paid（Google/FB/AFF/Bing）+ Free（Organic/Direct）。</p>
+                </div>
+                <span class="tag info" id="gmvNote">—</span>
+              </div>
+              <div class="v5-kpi-row">
+                <div class="v5-kpi"><span>Session</span><strong id="gmvSession">—</strong><small>访问量</small></div>
+                <div class="v5-kpi"><span>CR</span><strong id="gmvCr">—</strong><small>转化率</small></div>
+                <div class="v5-kpi"><span>AOV</span><strong id="gmvAov">—</strong><small>ASP × 连单率</small></div>
+                <div class="v5-kpi"><span>GMV</span><strong id="gmvGmv">—</strong><small id="gmvGmvCheck">CR×AOV×Session</small></div>
+              </div>
+              <div class="traffic-bar-wrap">
+                <div class="traffic-bar" id="trafficBar"></div>
+                <div class="traffic-legend" id="trafficLegend"></div>
+              </div>
+            </section>
+
+            <!-- 成本结构 -->
+            <section class="panel section">
+              <div class="section-title">
+                <div>
+                  <h2>v0.5 · 成本结构（指标逻辑五口子）</h2>
+                  <p>利润 = 采购价/GMV + 物流头程多海运少空运 + 尾程派等单 + 营销 GMV/AS 控 ROI + 其它仓储/平台/风控/关税 + 收单。</p>
+                </div>
+                <span class="tag info" id="costNote">—</span>
+              </div>
+              <div class="cost-rows" id="costRows"></div>
+              <div class="cost-totals">
+                <div><span>总成本</span><strong id="costTotal">—</strong></div>
+                <div><span>贡献利润（既有口径）</span><strong id="costProfit">—</strong></div>
+              </div>
+              <div class="field-note" style="margin-top:8px">说明：采购/头程/尾程/其它/收单按 GMV 占比估算（与【指标-成本】对齐）；营销 AS = 每日广告预算 × 模拟天数；贡献利润沿用 SKU 单位成本（31 元/件）原口径，两套口径并列便于交叉验证。</div>
+            </section>
+
+            <!-- ROI + 复购 -->
+            <section class="panel section">
+              <div class="section-title">
+                <div>
+                  <h2>v0.5 · ROI 与复购</h2>
+                  <p>ROI = 销售额 ÷ 广告花费；预测承压时 AS 该涨就涨，但要盯 ROI。复购率 = 积分/EDM/售后流量贡献的长期 GMV。</p>
+                </div>
+              </div>
+              <div class="v5-kpi-row">
+                <div class="v5-kpi"><span>广告花费</span><strong id="roiAd">—</strong><small>ad × 天数</small></div>
+                <div class="v5-kpi"><span>销售额</span><strong id="roiGmv">—</strong><small>模拟 GMV</small></div>
+                <div class="v5-kpi"><span>ROI</span><strong id="roiValue">—</strong><small id="roiClass">—</small></div>
+                <div class="v5-kpi"><span>复购贡献 GMV</span><strong id="repurchaseGmv">—</strong><small id="repurchaseLabel">复购率 × 周期</small></div>
+              </div>
+            </section>
+
+            <!-- 综合经营评分 -->
+            <section class="panel section">
+              <div class="section-title">
+                <div>
+                  <h2>v0.5 · 综合经营评分</h2>
+                  <p>综合分 = GMV 25% + 贡献利润 25% + 库存健康 20% + 缺货控制 15% + Forecast 准确 10% + 价格健康 5%（handoff 第13节公式）。</p>
+                </div>
+                <span class="tag" id="scoreTotalTag">—</span>
+              </div>
+              <div class="score-rows" id="scoreRows"></div>
+            </section>
+          </div>
+
           <div class="analysis-grid">
             <section class="panel assessment">
               <h3>模型诊断</h3>
@@ -1176,27 +1335,77 @@
     const PROMO_END = 50;
 
     const presets = {
-      stable: {
-        forecast: 20, marketDemand: 22, promo: 1.4, price: 79, adBudget: 90,
-        inventory: 3500, replenishment: 3500, reorderDays: 14, productionDays: 45,
-        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 21
+      // —— v0.5 真实场景（基于 Govee UK 2024 forecast xlsx：UK 30天日均中位32 / EU 中位46；
+      //    UK 有 黑五日均+PFD日均 sheet → 黑五/PFD 是真实经营节奏）——
+      "eu-stable": {
+        forecast: 32, marketDemand: 34, promo: 1.4, price: 79, adBudget: 90,
+        inventory: 4800, replenishment: 4800, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 21,
+        aovMultiplier: 1.18, repurchaseRate: 0.08,
+        v5: {
+          traffic: { google: 0.30, fb: 0.26, aff: 0.08, bing: 0.05, organic: 0.21, direct: 0.10 },
+          cr: 0.020,
+          costRates: { procurement: 0.30, headFreight: 0.10, tailFreight: 0.08, other: 0.09, payment: 0.028 },
+          note: "EU 稳定款 · 日均锚 UK 中位 32 / EU 中位 46；高库存≈150天基础走攻略P2.5科学路径"
+        }
       },
-      promo: {
-        forecast: 24, marketDemand: 29, promo: 2.4, price: 69, adBudget: 180,
-        inventory: 5600, replenishment: 5600, reorderDays: 14, productionDays: 45,
-        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 28
+      "uk-bf": {
+        forecast: 60, marketDemand: 55, promo: 2.6, price: 69, adBudget: 240,
+        inventory: 9000, replenishment: 9000, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 28,
+        aovMultiplier: 1.30, repurchaseRate: 0.05,
+        v5: {
+          traffic: { google: 0.22, fb: 0.36, aff: 0.12, bing: 0.04, organic: 0.17, direct: 0.09 },
+          cr: 0.022,
+          costRates: { procurement: 0.28, headFreight: 0.10, tailFreight: 0.08, other: 0.09, payment: 0.028 },
+          note: "UK 黑五大促 · xlsx 有 黑五日均+PFD日均 sheet；高备货+高广告守预测(攻略P6)"
+        }
       },
-      slow: {
-        forecast: 24, marketDemand: 11, promo: 1.2, price: 89, adBudget: 60,
-        inventory: 4200, replenishment: 2500, reorderDays: 14, productionDays: 45,
-        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 14
+      "new-launch": {
+        forecast: 18, marketDemand: 18, promo: 1.2, price: 79, adBudget: 120,
+        inventory: 1500, replenishment: 2800, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 14,
+        aovMultiplier: 1.10, repurchaseRate: 0.04,
+        v5: {
+          traffic: { google: 0.25, fb: 0.32, aff: 0.10, bing: 0.03, organic: 0.20, direct: 0.10 },
+          cr: 0.016,
+          costRates: { procurement: 0.32, headFreight: 0.11, tailFreight: 0.09, other: 0.10, payment: 0.030 },
+          note: "新品首单 · 攻略P3 从上线日起 forecast；同品线锚≈18；按首单 SOP 送审"
+        }
+      },
+      "eol-clear": {
+        forecast: 8, marketDemand: 8, promo: 1.2, price: 69, adBudget: 25,
+        inventory: 600, replenishment: 0, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 7,
+        aovMultiplier: 1.05, repurchaseRate: 0.02,
+        v5: {
+          traffic: { google: 0.35, fb: 0.18, aff: 0.05, bing: 0.06, organic: 0.26, direct: 0.10 },
+          cr: 0.024,
+          costRates: { procurement: 0.25, headFreight: 0.10, tailFreight: 0.08, other: 0.08, payment: 0.028 },
+          note: "EOL 清库 · 攻略P8 卖完那天就好(600÷75≈8)；Forecast ≤ 库存；不补货"
+        }
+      },
+      "promo-defend": {
+        forecast: 45, marketDemand: 42, promo: 1.6, price: 79, adBudget: 260,
+        inventory: 5800, replenishment: 5800, reorderDays: 14, productionDays: 45,
+        pickupDays: 0, shippingDays: 60, listingDays: 0, safetyDays: 21,
+        aovMultiplier: 1.25, repurchaseRate: 0.10,
+        v5: {
+          traffic: { google: 0.28, fb: 0.30, aff: 0.10, bing: 0.04, organic: 0.18, direct: 0.10 },
+          cr: 0.018,
+          costRates: { procurement: 0.30, headFreight: 0.10, tailFreight: 0.08, other: 0.09, payment: 0.028 },
+          note: "促销防守 · 攻略P6 CR 固定靠流量；高广告预算守预测；稳+活动"
+        }
       }
     };
+
+    const DEFAULT_V5 = presets["eu-stable"].v5;
+    let currentPresetName = "eu-stable";
 
     const ids = [
       "forecast", "marketDemand", "promo", "price", "adBudget", "inventory",
       "replenishment", "reorderDays", "productionDays", "pickupDays", "shippingDays",
-      "listingDays", "safetyDays"
+      "listingDays", "safetyDays", "aovMultiplier", "repurchaseRate"
     ];
 
     const $ = (id) => document.getElementById(id);
@@ -1226,6 +1435,10 @@
       $("inventoryValue").textContent = `${formatNumber(Number($("inventory").value))} 件`;
       $("replenishmentValue").textContent = `${formatNumber(Number($("replenishment").value))} 件`;
       $("safetyDaysValue").textContent = `${$("safetyDays").value} 天`;
+      const av = Number($("aovMultiplier").value);
+      $("aovMultiplierValue").textContent = `${av.toFixed(2)}×`;
+      const rr = Number($("repurchaseRate").value);
+      $("repurchaseRateValue").textContent = `${(rr * 100).toFixed(0)}%`;
     }
 
     function simulate(input) {
@@ -1511,6 +1724,121 @@
       $("triggerOrderDay").textContent = result.triggerOrderDay !== null ? `第 ${result.triggerOrderDay} 天` : "当前无断货";
     }
 
+    // ===== v0.5 enrichment：从现有模拟结果派生 GMV 拆解 / 成本结构 / ROI / 综合经营分 =====
+    function enrichResult(result) {
+      const input = result.input;
+      const v5 = (currentPresetName && presets[currentPresetName] && presets[currentPresetName].v5) || DEFAULT_V5;
+      const aovMult = input.aovMultiplier || 1.18;
+      const aovVal = input.price * aovMult;
+      const cr = v5.cr;
+      const revenue = result.revenue;
+      const session = (cr > 0 && aovVal > 0) ? revenue / (cr * aovVal) : 0;
+      const traffic = v5.traffic;
+      const trafficAbs = {
+        google: session * traffic.google, fb: session * traffic.fb, aff: session * traffic.aff,
+        bing: session * traffic.bing, organic: session * traffic.organic, direct: session * traffic.direct
+      };
+      const rates = v5.costRates;
+      const procurementCost = revenue * rates.procurement;
+      const headFreightCost = revenue * rates.headFreight;
+      const tailFreightCost = revenue * rates.tailFreight;
+      const otherCost = revenue * rates.other;
+      const paymentCost = revenue * rates.payment;
+      const marketingCost = input.adBudget * (DAY_COUNT + 1);
+      const totalCost = procurementCost + headFreightCost + tailFreightCost + marketingCost + otherCost + paymentCost;
+      const roi = marketingCost > 0 ? revenue / marketingCost : 0;
+      const repurchaseRate = input.repurchaseRate || 0.08;
+      const repurchaseGmv = revenue * repurchaseRate * 1.5;
+
+      // 综合经营评分（handoff 第13节）
+      const planGmv = input.forecast * input.price * (DAY_COUNT + 1);
+      const gmvScore = clamp(planGmv > 0 ? (revenue / planGmv) * 80 : 0, 0, 100);
+      const profitMargin = result.profitMargin;
+      const profitScore = clamp((profitMargin + 0.1) * 250, 0, 100);
+      const stockoutScore = clamp(100 - result.stockoutDays * 4, 0, 100);
+      const endingCov = result.endingCoverage;
+      let stockScore = 60;
+      if (endingCov >= 30 && endingCov <= 90) stockScore = 100;
+      else if (endingCov < 30) stockScore = clamp(endingCov / 30 * 100, 0, 100);
+      else stockScore = clamp(100 - (endingCov - 90) * 0.5, 0, 100);
+      const fcstRatio = result.forecastRatio;
+      const fcstScore = fcstRatio >= 0.9 && fcstRatio <= 1.1 ? 100 : clamp(100 - Math.abs(1 - fcstRatio) * 200, 0, 100);
+      const priceFactor = result.priceFactor;
+      const priceScore = clamp(100 - Math.abs(1 - priceFactor) * 100, 0, 100);
+      const totalScore = gmvScore * 0.25 + profitScore * 0.25 + stockScore * 0.20 + stockoutScore * 0.15 + fcstScore * 0.10 + priceScore * 0.05;
+
+      result.v5 = {
+        v5, traffic, trafficAbs, session, cr, aovVal, aovMult,
+        procurementCost, headFreightCost, tailFreightCost, otherCost, paymentCost,
+        marketingCost, totalCost, roi, repurchaseRate, repurchaseGmv,
+        score: { gmv: gmvScore, profit: profitScore, stock: stockScore, stockout: stockoutScore, fcst: fcstScore, price: priceScore, total: totalScore },
+        note: v5.note
+      };
+      return result;
+    }
+
+    function renderV5(result) {
+      const v = result.v5;
+      $("gmvNote").textContent = currentPresetName ? (presets[currentPresetName].v5.note.split(" · ")[0]) : "自定义";
+      $("gmvSession").textContent = formatNumber(v.session);
+      $("gmvCr").textContent = (v.cr * 100).toFixed(2) + "%";
+      $("gmvAov").textContent = formatMoney(v.aovVal);
+      $("gmvGmv").textContent = formatMoney(result.revenue);
+      const sources = [
+        { k: "Google", val: v.traffic.google, color: "#4285f4" },
+        { k: "Facebook", val: v.traffic.fb, color: "#1877f2" },
+        { k: "AFF", val: v.traffic.aff, color: "#9b59b6" },
+        { k: "Bing", val: v.traffic.bing, color: "#008373" },
+        { k: "Organic", val: v.traffic.organic, color: "#27ae60" },
+        { k: "Direct", val: v.traffic.direct, color: "#7f8c8d" }
+      ];
+      $("trafficBar").innerHTML = sources.map(s => `<span style="width:${(s.val*100).toFixed(1)}%;background:${s.color}" title="${s.k} ${(s.val*100).toFixed(1)}%"></span>`).join("");
+      $("trafficLegend").innerHTML = sources.map(s => `<span><i style="background:${s.color}"></i>${s.k} ${(s.val*100).toFixed(0)}%</span>`).join("");
+      $("costNote").textContent = "头程多海运少空运 / 尾程派等单 / 营销AS";
+      const costRows = [
+        ["采购价/GMV", v.procurementCost, v.v5.costRates.procurement, "采购价 ÷ GMV"],
+        ["头程（多海运少空运）", v.headFreightCost, v.v5.costRates.headFreight, "交通方式→Forecast/备货/发运"],
+        ["尾程（派等单规模效益）", v.tailFreightCost, v.v5.costRates.tailFreight, "发货结构→派等单"],
+        ["营销（AS 控 ROI）", v.marketingCost, null, "ad × 天数（P6 该涨就涨）"],
+        ["其它（仓储/平台/风控/关税）", v.otherCost, v.v5.costRates.other, "仓储/平台/风控/关税"],
+        ["收单", v.paymentCost, v.v5.costRates.payment, "支付手续费"]
+      ];
+      $("costRows").innerHTML = costRows.map(([name, amt, rate, hint]) => `
+        <div class="cost-row">
+          <div class="cost-name">${name}<small>${hint}</small></div>
+          <div class="cost-amt">${formatMoney(amt)}</div>
+          <div class="cost-rate">${rate !== null ? (rate*100).toFixed(1) + "%" : "—"}</div>
+          <div class="cost-bar"><span style="width:${(result.revenue>0 ? Math.min(amt/result.revenue,1)*100 : 0).toFixed(1)}%"></span></div>
+        </div>`).join("");
+      $("costTotal").textContent = formatMoney(v.totalCost);
+      $("costProfit").textContent = formatMoney(result.contributionProfit);
+      $("roiAd").textContent = formatMoney(v.marketingCost);
+      $("roiGmv").textContent = formatMoney(result.revenue);
+      $("roiValue").textContent = v.roi.toFixed(2);
+      let roiText = "优秀", roiCls = "good";
+      if (v.roi < 2) { roiText = "广告效率低"; roiCls = "bad"; }
+      else if (v.roi < 4) { roiText = "可接受"; roiCls = "warn"; }
+      const roiTag = $("roiClass"); roiTag.textContent = roiText; roiTag.className = "tag " + roiCls;
+      $("repurchaseGmv").textContent = formatMoney(v.repurchaseGmv);
+      $("repurchaseLabel").textContent = `复购率 ${(v.repurchaseRate*100).toFixed(0)}% × 1.5 周期`;
+      const sc = v.score;
+      const scoreRows = [
+        ["GMV 达成", sc.gmv, 0.25], ["贡献利润", sc.profit, 0.25],
+        ["库存健康", sc.stock, 0.20], ["缺货控制", sc.stockout, 0.15],
+        ["Forecast 准确", sc.fcst, 0.10], ["价格健康", sc.price, 0.05]
+      ];
+      $("scoreRows").innerHTML = scoreRows.map(([name, val, w]) => `
+        <div class="score-row">
+          <div class="score-name">${name}<small>权重 ${(w*100).toFixed(0)}%</small></div>
+          <div class="score-val">${val.toFixed(0)}</div>
+          <div class="score-bar"><span style="width:${val.toFixed(1)}%"></span></div>
+          <div class="score-weighted">贡献 ${(val*w).toFixed(1)}</div>
+        </div>`).join("");
+      const totalTag = $("scoreTotalTag");
+      totalTag.textContent = `综合 ${sc.total.toFixed(1)} 分`;
+      totalTag.className = "tag " + (sc.total >= 75 ? "good" : sc.total >= 50 ? "warn" : "bad");
+    }
+
     function render(result) {
       const verdict = $("verdict");
       verdict.className = `verdict ${result.level === "good" ? "" : result.level}`.trim();
@@ -1530,6 +1858,8 @@
       renderRealOrder(result);
       renderTimeline(result);
       renderChart(result);
+      enrichResult(result);
+      renderV5(result);
       renderAssessment(result);
       window.latestResult = result;
     }
@@ -1544,6 +1874,7 @@
 
     function setPreset(name) {
       setInput(presets[name]);
+      currentPresetName = name;
       document.querySelectorAll(".preset-btn").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.preset === name);
       });
@@ -1552,6 +1883,7 @@
 
     ids.forEach(id => {
       $(id).addEventListener("input", () => {
+        currentPresetName = null;
         document.querySelectorAll(".preset-btn").forEach(btn => btn.classList.remove("active"));
         runSimulation();
       });
@@ -1581,12 +1913,12 @@
 
     $("runBtn").addEventListener("click", () => runSimulation(true));
     $("mobileRunBtn").addEventListener("click", () => runSimulation(true));
-    $("resetBtn").addEventListener("click", () => setPreset("stable"));
+    $("resetBtn").addEventListener("click", () => setPreset("eu-stable"));
     $("helpBtn").addEventListener("click", () => {
       alert("学习目标：\\n\\n1. Forecast 是供应计划的起点。\\n2. 全流程 Lead Time 是从今天行动到海外可售的客观时长。\\n3. 安全库存把补货警戒线提前，但不会让生产或运输过程变长。\\n4. 运营要同时管理销量、利润、缺货与积压。");
     });
 
-    setPreset("stable");
+    setPreset("eu-stable");
   </script>
 <script>
 (function () {
