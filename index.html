@@ -1001,10 +1001,13 @@
     .lab-params { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; margin-top: 2px; }
     .lab-field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-width: 0; transition: box-shadow .25s, border-color .25s; }
     .lab-field.glow { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-    .lab-field-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 3px; min-width: 0; }
+    .lab-field-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 1px; min-width: 0; }
     .lab-field-top label { font-size: 13px; font-weight: 600; display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; }
     .lab-val { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
-    .lab-note-inline { font-size: 10.5px; font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    /* v0.14.2：说明文字曾经挤在标题行里跟标签共用一个 flex 容器抢空间，窄栏下标签本身会被截断
+       成两行（"下单/日"）——现在说明文字独占一整行、允许正常换行，标签行只剩「标签+新徽章」，
+       再窄也不会被拆断，比截断省略号更「结实」：信息不会丢，只是多占一行高度。 */
+    .lab-note-inline { display: block; font-size: 10.5px; font-weight: 400; color: var(--muted); line-height: 1.4; margin: 0 0 4px; }
     .lab-field input[type=range] { width: 100%; accent-color: var(--accent); }
     /* choice 按钮组用 CSS Grid 固定两列，而不是 flex-wrap——flex-wrap 下最后一个单独换行的按钮会
        被 flex-grow 撑成整行宽（v0.14 截图里"旺季爆仓·140天"单独占一整行的怪样子），grid 两列
@@ -2126,8 +2129,8 @@
   });
 })();
 </script>
-<script src="teach-data.js?v=20260726s"></script>
-<script src="teach-core.js?v=20260726s"></script>
-<script src="lab-core.js?v=20260726s"></script>
+<script src="teach-data.js?v=20260726t"></script>
+<script src="teach-core.js?v=20260726t"></script>
+<script src="lab-core.js?v=20260726t"></script>
 </body>
 </html>

@@ -944,9 +944,15 @@
       const row = document.createElement("div");
       row.className = "lab-field" + (newSet.has(name) ? " glow" : "");
       row.dataset.param = name;
+      // 标题行只放【标签+新徽章】+【当前值】——说明文字单独占一整行（见下方 lab-note-inline），
+      // 不再挤在标题行里跟标签抢空间。之前挤在同一行时，窄栏下 flex 会把"下单日""安全库存参考"
+      // 这种 3~5 字标签硬生生截断成两行（"下单/日"），比原来的横向滚动条更难看——说明文字换成
+      // 独占一行后，标签再也不用跟它抢宽度，永远不会被拆断。
+      const headerHTML = `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}</label><span class="lab-val" id="labVal_${name}"></span></div>` +
+        `<div class="lab-note-inline">${def.note}</div>`;
       if (def.type === "choice") {
         row.innerHTML =
-          `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}<span class="lab-note-inline">${def.note}</span></label><span class="lab-val" id="labVal_${name}"></span></div>` +
+          headerHTML +
           `<div class="lab-choice-group" id="labIn_${name}">` +
           def.options.map((o) => `<button type="button" class="lab-choice-btn" data-value="${o.value}">${o.label}</button>`).join("") +
           `</div>`;
@@ -964,7 +970,7 @@
         });
       } else {
         row.innerHTML =
-          `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}<span class="lab-note-inline">${def.note}</span></label><span class="lab-val" id="labVal_${name}"></span></div>` +
+          headerHTML +
           `<input type="range" id="labIn_${name}" min="${def.min}" max="${def.max}" step="${def.step}">`;
         wrap.appendChild(row);
         const input = row.querySelector("input");
