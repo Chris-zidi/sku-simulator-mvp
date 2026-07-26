@@ -41,9 +41,29 @@
     inventory:  { label: "期初库存",     min: 0,    max: 12000, step: 50,  unit: "件",   note: "今天手里有多少货" },
     demand:     { label: "真实日均销量", min: 0,    max: 120,  step: 1,    unit: "件/天", note: "市场实际每天卖出多少" },
     forecast:   { label: "预测日均销量", min: 0,    max: 120,  step: 1,    unit: "件/天", note: "你开工前判断的每天能卖多少（计划）" },
-    leadTime:   { label: "补货提前期",   min: 14,   max: 160,  step: 1,    unit: "天",   note: "从下单到海外可售的客观时长" },
+    // v0.14：提前期不再是连续滑块——现实里它是「选一种物流方式」的一次性场景决策，
+    // 不是逐日拖动的杆，改成 choice 类型（几个物流方式按钮）。
+    leadTime:   { type: "choice", label: "物流方式", unit: "天",
+      note: "选一种物流方式——这是给定条件，换供应商/换物流才会变",
+      options: [
+        { value: 20,  label: "空运 · 20天" },
+        { value: 45,  label: "海运快船 · 45天" },
+        { value: 90,  label: "海运慢船 · 90天" },
+        { value: 140, label: "旺季爆仓 · 140天" }
+      ] },
     replenish:  { label: "补货量",       min: 0,    max: 12000, step: 50,   unit: "件",   note: "到货时一次性补进来的数量" },
-    safetyDays: { label: "安全库存天数", min: 0,    max: 45,   step: 1,    unit: "天",   note: "把补货警戒线提前的缓冲" },
+    // v0.14：安全库存天数不再驱动「何时下单」的公式，改成几档参考建议线，
+    // 只用来跟玩家自己拖的【下单日】做对比，不再自动帮你下单。
+    safetyDays: { type: "choice", label: "安全库存参考", unit: "天",
+      note: "只是几档参考建议线，不会替你下单",
+      options: [
+        { value: 0,  label: "不留缓冲 · 0天" },
+        { value: 7,  label: "标准缓冲 · 7天" },
+        { value: 14, label: "保守缓冲 · 14天" },
+        { value: 21, label: "非常保守 · 21天" }
+      ] },
+    // v0.14 新增：下单日——玩家自己拖，直接决定早订压仓/晚订断货，取代原先的自动触发公式。
+    orderDay:   { label: "下单日",       min: 0,    max: 170,  step: 1,    unit: "天",   note: "你哪天点下单按钮——这是你自己的决策" },
     promo:      { label: "促销系数",     min: 1,    max: 4,    step: 0.1,  unit: "×",    note: "促销期销量放大倍数" },
     promoDay:   { label: "促销开始日",   min: 0,    max: 170,  step: 1,    unit: "天",   note: "从第几天起进入促销" }
   };
@@ -113,41 +133,42 @@
     },
     {
       logic: "补货",
-      title: "补货提前期：箭头为啥在那一时刻？",
+      title: "下单日：早了压仓，晚了断货，你说了算",
       element: "leadTime",
-      newParam: ["leadTime", "replenish"],
+      newParam: ["leadTime", "orderDay", "replenish"],
       newLabel: "🟢 补货到货",
       intro:
-        "现实里：库存快没了要补货，但货从下单到上架要等很久（<b>提前期</b>）。<br>" +
-        "<b>绿色箭头 = 到货日</b>。箭头下方数字 = 一次补进来几件。<br>" +
-        "如果<b>到货日 > 售罄日</b>，中间就是<b>红色缺货带</b>——你明明卖得动却没货可卖（少赚 + 评分降）。<br>" +
+        "现实里补货要面对两件不一样的事：<b>提前期是给定条件</b>——选好一种物流方式（比如海运快船 45 天），这次场景就固定下来，换供应商/换物流才会变；<b>哪天下单才是你真正的决策</b>——库存快没了，你要自己盯着库存线，决定哪天点下单。<br>" +
+        "<b>绿色箭头 = 到货日 = 你选的下单日 + 提前期</b>。箭头下方数字 = 一次补进来几件。<br>" +
+        "如果<b>到货日 > 售罄日</b>，中间就是<b>红色缺货带</b>——你下单下晚了，明明卖得动却没货可卖（少赚 + 评分降）。<br>" +
         "<b>先声明一件事</b>：这一关和下一关，我们先假设你对销量的判断和真实完全一致（预测=真实）——把「什么时候该下单」这件事先学会，最后一关才会把这个假设拿掉。",
-      instruct: "拖【补货提前期】从 140 拉到 160：🔻 绿箭头右移，🟥 红色缺货带变大；再拖【补货量】看补多少能把绿线抬回 0 之上。",
-      observe: "观察 🔻 绿箭头（到货日）和 ▏红竖虚线（售罄日）的前后关系：箭头在红线右边 = 到货太晚 = 中间全是 🟥 缺货带。",
-      baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { leadTime: 160 },
+      instruct: "先选一种【物流方式】（比如海运快船 45 天）；再拖【下单日】：拖到接近售罄日甚至更晚，🟥 红色缺货带会变大；往前拖，缺货带会缩小甚至消失——找到刚好能接上售罄日的位置。",
+      observe: "观察 🔻 绿箭头（到货日）和 ▏红竖虚线（售罄日）的前后关系：箭头在红线右边 = 你下单下晚了 = 中间全是 🟥 缺货带。",
+      baseline: { inventory: 3000, demand: 40, forecast: 40, leadTime: 45, orderDay: 70, replenish: 4000, safetyDays: 0, promo: 1, promoDay: 60 },
+      demoTarget: { orderDay: 20 },
       dict: [
-        { k: "🔻 绿箭头", v: "到货那一刻 = 下单日 + 提前期。箭头下方数字 = 一次补几件。" },
+        { k: "🕹 下单日", v: "你自己拖的决策——早了压仓，晚了断货，接不上售罄日就会出现缺货带。" },
+        { k: "🔻 绿箭头", v: "到货那一刻 = 你选的下单日 + 提前期。箭头下方数字 = 一次补几件。" },
         { k: "🟥 红缺货带", v: "售罄日到到货日之间 = 零货可卖的天数。最痛的那段。" }
       ]
     },
     {
       logic: "安全",
-      title: "安全库存：为啥要提前画一条线？",
+      title: "安全库存：一条参考线，不是自动开关",
       element: "safety",
       newParam: ["safetyDays"],
-      newLabel: "🟠 安全库存线",
+      newLabel: "🟠 参考建议线",
       intro:
-        "别等售罄才下单！留个「安全垫」：<b>库存线掉到琥珀虚线就立刻下单</b>。<br>" +
-        "<b>琥珀线高度 = 安全天数 × 日销</b>。比如安全 7 天、日销 48 → 线高度 = 336 件。<br>" +
-        "它不延长物流，只把<b>下单那一刻提前</b>——箭头跟着提前，缺货带可能消失。",
-      instruct: "拖【安全库存天数】从 14 拉到 30：⚌ 琥珀虚线抬高 → 库存线更早撞到它 → 下单提前 → 🔻 绿箭头左移 → 🟥 红缺口缩小甚至消失。",
-      observe: "观察 ⚌ 琥珀虚线的高度 = 安全天数 × 日销（14 天 × 48 件 = 672 件）。观察 🔻 绿箭头：安全天数越大，箭头越靠左（越早到货）。",
-      baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 14, promo: 1, promoDay: 60 },
-      demoTarget: { safetyDays: 30 },
+        "上一关你已经学会自己拖【下单日】了。这一关加一条「参考建议线」帮你判断——留几天「安全垫」，算出一个建议下单日，<b>只是参考，不会替你下单</b>，你上一关拖的【下单日】滑块还是完全由你自己控制。<br>" +
+        "参考日 = 库存覆盖天数 − 缓冲天数 − 提前期。缓冲天数越大，参考线越靠左（建议你更早下单）。<br>" +
+        "对比你自己选的下单日和这条参考线：晚于参考线 = 更容易断货；早于参考线 = 更容易压仓。",
+      instruct: "切换几档【安全库存参考】（0/7/14/21 天），观察 📍 参考建议虚线左右移动；再回头看你自己在上一关定的【下单日】，比参考线早还是晚。",
+      observe: "观察 📍 参考建议虚线的位置随缓冲天数变化；观察读数「参考建议日」，看你自己选的下单日和它差几天。",
+      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 45, orderDay: 55, replenish: 4000, safetyDays: 7, promo: 1, promoDay: 60 },
+      demoTarget: { safetyDays: 21 },
       dict: [
-        { k: "⚌ 琥珀虚线", v: "「警戒线」。库存掉到这条线立刻下单。高度 = 安全天数 × 日销。" },
-        { k: "🛟 缓冲", v: "安全天数越大 → 越早下单 → 越能躲过红缺货带，但会压更多库存。" }
+        { k: "📍 参考建议线", v: "按缓冲天数算出的建议下单点，只做参考，不会自动帮你下单。" },
+        { k: "🛟 缓冲天数", v: "越大 → 参考线越靠左（建议更早下单）→ 越能防断货，但也更容易压仓。" }
       ]
     },
     {
@@ -162,10 +183,10 @@
         "<b>现实里你没有这个视角，你只有「预测」</b>。这一关开始，「什么时候下单、下多少」全部改成<b>按你的预测算</b>，真实销量只负责决定库存实际怎么消耗——预测和真实终于要分开了。<br>" +
         "<b>预测偏低</b>：你以为还能撑很久，其实早就该下单了——下单晚、下单少 → 🟥 缺货带变大 → <b>少赚钱</b>。<br>" +
         "<b>预测偏高</b>：你以为很快要断货，赶紧多下单——货到了却卖不完，压在仓库里 → <b>占用资金</b>。<br>" +
-        "<small>（这一关把【补货提前期】先调回 30 天——140 天太长，180 天的时间轴里连一整个「下单→到货→卖完」的周期都放不下，看不出预测误差的效果；想看长提前期的压力，可以再拖回 140。）</small>",
+        "<small>（这一关物流方式默认选了「空运·20天」——提前期太长的话，180 天的时间轴里连一整个「下单→到货→卖完」的周期都放不下，看不出预测误差的效果；想看长提前期的压力，可以自己切换物流方式。）</small>",
       instruct: "拖【预测日均销量】：往下拖到 20（比真实 48 低很多）看缺货带怎么变大、少赚多少钱；再拖到 90（比真实高很多）看期末剩下一堆货、占用多少资金。拖回 48（等于真实）两种代价都会趋近于 0。",
       observe: "观察读数「少赚金额」「压仓占用」：这两个数不是装饰——预测的每一分误差，最后都变成了真金白银的损失。补货量这一关起不再手动拖，系统按你的预测自动算「该补多少」，算错了 lostSales/期末库存会立刻告诉你。",
-      baseline: { inventory: 5000, demand: 48, forecast: 48, leadTime: 30, replenish: 4000, safetyDays: 14, promo: 1, promoDay: 60 },
+      baseline: { inventory: 5000, demand: 48, forecast: 48, leadTime: 20, orderDay: 84, replenish: 4000, safetyDays: 14, promo: 1, promoDay: 60 },
       demoTarget: { forecast: 20 },
       dict: [
         { k: "🟣 紫虚线", v: "「计划」曲线 = 按你预测的日销算出的库存走势。虚线代表还没发生。" },
@@ -187,7 +208,7 @@
         "光加广告不补货 = 尖峰压垮库存，加速断货、加速少赚。",
       instruct: "拖【促销系数】从 1.4 拉到 2.5：🟡 尖峰更陡，库存断崖式下跌；再调【促销开始日】看 ▏琥珀竖虚线（= 斜率切换点）左右移动。",
       observe: "观察 🟡 尖峰：促销开始日之后 📉 绿线突然变陡（斜率 × 促销系数）。观察 ▏琥珀竖虚线：它标出「从这天起线变陡」。",
-      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, replenish: 4000, safetyDays: 21, promo: 1.4, promoDay: 60 },
+      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, orderDay: 20, replenish: 4000, safetyDays: 21, promo: 1.4, promoDay: 60 },
       demoTarget: { promo: 2.5 },
       dict: [
         { k: "🟡 尖峰", v: "促销期斜率临时放大 = 线突然变陡。日销 × 促销系数。" },
@@ -254,34 +275,35 @@
   // 而不是让库存本身变成负数——现实里库存不会是负的。
   //
   // v0.11 核心修复：「决策」和「结果」彻底分开——
-  //   决策侧（什么时候下单、下多少）永远用 forecastDaily 算，因为现实里你下单那一刻
+  //   决策侧（下多少）永远用 forecastDaily 算，因为现实里你下单那一刻
   //   并不知道真实销量，只有预测；结果侧（库存实际怎么消耗）永远用 p.demand 算，因为
   //   货卖出去多少是真实发生的事，不受你预测对不对影响。
   //   hasForecastDriven=false 时 forecastDaily 等于 p.demand（前 5 关的「假设预测=真实」），
   //   两侧用的是同一个数，跟旧版行为完全一致，不会回归；hasForecastDriven=true 时
   //   forecastDaily 才真正等于 p.forecast，预测错了，决策就会跟着错。
+  //
+  // v0.14 核心修复：「哪天下单」不再是公式自动触发（旧版 cover<=safetyDays+leadTime），
+  //   改成玩家自己拖的 p.orderDay 直接决定——早订会压仓、晚订会断货，后果由玩家的
+  //   选择直接负责，不再是黑盒规则替玩家做决定。
   function simulate(p, hasLead, hasPromo, hasForecastDriven, injectReplenish) {
     const inv = new Array(HORIZON + 1).fill(0);
     inv[0] = p.inventory;
-    let ordered = false, orderDay = -1, arrivalDay = -1, suggestedQty = 0;
     let lostSales = 0, stockoutDays = 0, sellOutDay = -1, soldQty = 0;
     const forecastDaily = hasForecastDriven ? p.forecast : p.demand;
+    let orderDay = -1, arrivalDay = -1, suggestedQty = 0;
+    if (hasLead) {
+      orderDay = clamp(Math.round(p.orderDay), 0, HORIZON);
+      arrivalDay = Math.min(HORIZON, orderDay + p.leadTime);
+      // 建议补货量：这个简化模型只模拟「一次下单」（没有做周期性再订货），
+      // 所以这一次补货必须够撑到 180 天演示结束——按预测日销 × 到货后剩下的天数来算。
+      // 预测准 → 刚好够用到结束（少量安全垫剩余，接近 0 成本）；
+      // 预测偏低 → 按偏低的日销算出的量不够撑到结束 → 会在结束前再次断货 → 少赚；
+      // 预测偏高 → 按偏高的日销算出的量算多了 → 结束时还剩一大堆 → 压仓。
+      suggestedQty = Math.max(0, forecastDaily * (HORIZON - arrivalDay));
+    }
     for (let t = 1; t <= HORIZON; t++) {
       const promoOn = hasPromo && t >= p.promoDay;
       const realDemandToday = p.demand * (promoOn ? p.promo : 1);
-      if (hasLead && !ordered) {
-        // 用「预测」算还能撑几天——预测错了，这一步就会跟着错（这是本次修复的关键）
-        const cover = inv[t - 1] / (forecastDaily || 1);
-        if (cover <= p.safetyDays + p.leadTime) {
-          ordered = true; orderDay = t; arrivalDay = Math.min(HORIZON, t + p.leadTime);
-          // 建议补货量：这个简化模型只模拟「一次下单」（没有做周期性再订货），
-          // 所以这一次补货必须够撑到 180 天演示结束——按预测日销 × 到货后剩下的天数来算。
-          // 预测准 → 刚好够用到结束（少量安全垫剩余，接近 0 成本）；
-          // 预测偏低 → 按偏低的日销算出的量不够撑到结束 → 会在结束前再次断货 → 少赚；
-          // 预测偏高 → 按偏高的日销算出的量算多了 → 结束时还剩一大堆 → 压仓。
-          suggestedQty = Math.max(0, forecastDaily * (HORIZON - arrivalDay));
-        }
-      }
       const replenishQty = hasForecastDriven ? suggestedQty : p.replenish;
       const available = inv[t - 1] + ((injectReplenish && arrivalDay === t && replenishQty > 0) ? replenishQty : 0);
       const sold = Math.min(realDemandToday, available); // 结果侧：真实卖出多少，永远受真实需求和真实库存约束
@@ -291,7 +313,15 @@
       inv[t] = Math.max(0, raw);
       if (sellOutDay < 0 && inv[t] <= 0) sellOutDay = t;
     }
-    return { inv, ordered, orderDay, arrivalDay, lostSales, stockoutDays, sellOutDay, suggestedQty, soldQty };
+    return { inv, ordered: hasLead, orderDay, arrivalDay, lostSales, stockoutDays, sellOutDay, suggestedQty, soldQty };
+  }
+
+  // v0.14：安全库存天数不再驱动结果，只是一条「参考建议下单日」，供玩家跟自己拖的
+  // orderDay 做对比（早了/晚了几天）。沿用旧公式的连续估算，纯粹是参考，不进 simulate()。
+  function computeSafetyRefDay(p, forecastDaily, si) {
+    if (!hasElement(si, "safety") || !forecastDaily) return -1;
+    const cover = p.inventory / forecastDaily;
+    return clamp(Math.round(cover - p.safetyDays - p.leadTime), 0, HORIZON);
   }
 
   function computeSeries(stageIndex) {
@@ -301,6 +331,8 @@
     const hasForecastDriven = hasElement(stageIndex, "forecast");
 
     const sim = simulate(p, hasLead, hasPromo, hasForecastDriven, true);
+    const forecastDaily = hasForecastDriven ? p.forecast : p.demand;
+    const refOrderDay = computeSafetyRefDay(p, forecastDaily, stageIndex);
 
     // 预测线（Forecast 关起）：按预测日销算出的「计划库存曲线」（不 clamp，纯粹是「计划」，不代表真实库存）
     let invF = null;
@@ -320,6 +352,7 @@
         sellOutDay: sim.sellOutDay,
         orderDay: sim.orderDay,
         arrivalDay: sim.arrivalDay,
+        refOrderDay,
         stockoutDays: sim.stockoutDays,
         lostSales: sim.lostSales,
         suggestedQty: sim.suggestedQty,
@@ -476,6 +509,12 @@
     }
     if (els.has("leadTime") && m.orderDay >= 0) {
       items.push({ key: "order", day: m.orderDay, label: "下单 第" + (m.orderDay + 1) + "天", color: "--amber" });
+    }
+    // v0.14：参考建议日——只是给玩家自己选的下单日做个对比基准，不是另一次真实事件。
+    if (els.has("safety") && m.refOrderDay >= 0) {
+      const delta = m.orderDay - m.refOrderDay;
+      const deltaNote = delta === 0 ? "" : delta > 0 ? "（你晚" + delta + "天）" : "（你早" + (-delta) + "天）";
+      items.push({ key: "ref", day: m.refOrderDay, label: "参考 第" + (m.refOrderDay + 1) + "天" + deltaNote, color: "--amber" });
     }
     const replenishQty = els.has("forecast") ? m.suggestedQty : p.replenish;
     if (els.has("leadTime") && m.arrivalDay >= 0 && replenishQty > 0) {
@@ -685,20 +724,17 @@
       }
     }
 
-    // 安全库存警戒线（安全关起，琥珀横向虚线；高度 = 安全天数 × 日销）
-    if (els.has("safety") && p.safetyDays > 0 && p.demand > 0) {
-      const safeLevel = p.safetyDays * p.demand;
-      if (safeLevel < yMax) {
-        const sy = y(safeLevel);
-        ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([7, 5]); ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(padL, sy); ctx.lineTo(padL + plotW, sy); ctx.stroke();
-        ctx.setLineDash([]);
-        pendingLabels.push({ text: "⚠ 安全线 " + fmt(safeLevel) + " 件（" + p.safetyDays + " 天 × 日销）", x: padL + 6, y: clampLabelY(sy - 6, padT, H, zeroY, hasBottomBand), align: "left", font: "bold 11px sans-serif", color: "--amber" });
-        // 节点：库存线与安全线的交点 = 该下单的那一刻（何时下单已在事件轨讲，这里只留圆点锚定位置）
-        if (m.orderDay >= 0 && m.orderDay <= progDay) {
-          drawNodeDot(ctx, x(m.orderDay), sy, cssVar("--amber"));
-        }
-      }
+    // v0.14：安全库存不再是自动触发阈值——琥珀横线换成一条竖向「参考建议日」虚线，
+    // 只做对比基准，不再决定任何结果。玩家自己拖的下单日单独打一个圆点在库存曲线上。
+    if (els.has("safety") && m.refOrderDay >= 0 && m.refOrderDay <= progDay) {
+      const rx = x(m.refOrderDay);
+      ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([3, 4]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(rx, padT); ctx.lineTo(rx, padT + plotH); ctx.stroke();
+      ctx.setLineDash([]);
+      pendingLabels.push({ text: "📍 参考建议 第" + (m.refOrderDay + 1) + "天", x: rx + 5, y: clampLabelY(padT + 14, padT, H, zeroY, hasBottomBand), align: "left", font: "11px sans-serif", color: "--amber" });
+    }
+    if (els.has("leadTime") && m.orderDay >= 0 && m.orderDay <= progDay) {
+      drawNodeDot(ctx, x(m.orderDay), y(inv[m.orderDay]), cssVar("--amber"));
     }
 
     placeLabels(ctx, pendingLabels, padT + 10, H - 24);
@@ -786,13 +822,18 @@
       }
     }
     if (hasElement(si, "leadTime") && m.orderDay >= 0) {
-      const forecastNote = hasElement(si, "forecast") ? "（按你的预测算的，不是按真实销量）" : "";
+      const forecastNote = hasElement(si, "forecast") ? "（到货量按你的预测算，不是按真实销量）" : "";
+      const refNote = hasElement(si, "safety") && m.refOrderDay >= 0
+        ? (m.orderDay > m.refOrderDay ? "比参考建议晚 " + (m.orderDay - m.refOrderDay) + " 天，缺货风险更高"
+           : m.orderDay < m.refOrderDay ? "比参考建议早 " + (m.refOrderDay - m.orderDay) + " 天，压仓风险更高"
+           : "刚好卡在参考建议这天")
+        : "";
       events.push({
         day: m.orderDay,
-        headline: "下单：第 " + (m.orderDay + 1) + " 天触发补货" + forecastNote,
-        what: "库存覆盖天数掉到「安全天数 + 提前期」，规则判定该下单了。",
-        why: "覆盖 ≤ 安全" + p.safetyDays + "天 + 提前期" + p.leadTime + "天 = " + (p.safetyDays + p.leadTime) + " 天时触发。",
-        action: "往右看提前期之后到货箭头落在哪一天。"
+        headline: "下单：你在第 " + (m.orderDay + 1) + " 天点了下单" + forecastNote,
+        what: "这一天是你自己拖【下单日】滑块定的，不是系统自动算的。",
+        why: refNote || "拖动【下单日】能看库存曲线上这个点跟着左右移动。",
+        action: "往右看提前期之后到货箭头落在哪一天，是不是接得上售罄日。"
       });
     }
     if (hasElement(si, "leadTime") && m.arrivalDay >= 0) {
@@ -849,6 +890,11 @@
     if (hasElement(si, "sellout")) rows.push(["售罄日", selloutMoment(si, m) < 0 ? "不会售罄" : selloutDayLabel(si, m)]);
     if (hasElement(si, "sellout")) rows.push(["缺货情况", m.stockoutDays > 0 ? badge(m.stockoutDays + " 天 · 少卖 " + fmt(m.lostSales) + " 件", "bad") : "0 天"]);
     if (hasElement(si, "leadTime")) rows.push(["下单日 / 到货日", (m.orderDay >= 0 ? "第 " + (m.orderDay + 1) + " 天" : "—") + " / " + (m.arrivalDay >= 0 ? "第 " + (m.arrivalDay + 1) + " 天" : "—")]);
+    if (hasElement(si, "safety")) {
+      const delta = m.orderDay - m.refOrderDay;
+      const deltaNote = m.refOrderDay < 0 ? "" : delta === 0 ? "（刚好卡点）" : delta > 0 ? "（你晚了 " + delta + " 天）" : "（你早了 " + (-delta) + " 天）";
+      rows.push(["参考建议日", (m.refOrderDay >= 0 ? "第 " + (m.refOrderDay + 1) + " 天" : "—") + deltaNote]);
+    }
     if (hasElement(si, "forecast")) {
       // 修误导性文案：原来只说「预测覆盖…偏低」，容易被读成「你预测低了」——
       // 现在明确区分预测偏高/偏低各自的后果（对齐 Part1.5）。
@@ -869,6 +915,22 @@
   }
 
   /* ---------- 滑块（只显示本关及之前解锁的因子）---------- */
+  // 拖滑块 / 点选择按钮 共用的「提交一次参数变化」逻辑：
+  // 连续拖动同一个滑块合并成一条撤销记录（400ms 内视为同一次拖动）；
+  // 但切到另一个参数时，即使上一个的 400ms 还没到期，也要立刻算新的一次操作——
+  // 否则连续快速改两个不同参数会被误合并成一步撤销。choice 按钮点击是离散的单次动作，
+  // 同样走这条路以保持撤销粒度一致。
+  function commitParamChange(name, value) {
+    if (!state.dragTimer || state.dragParam !== name) pushHistory();
+    state.dragParam = name;
+    clearTimeout(state.dragTimer);
+    state.dragTimer = setTimeout(() => { state.dragTimer = null; state.dragParam = null; }, 400);
+    state.current[name] = value;
+    const lbl = $("labVal_" + name);
+    if (lbl) lbl.textContent = fmt(value) + " " + PARAMS[name].unit;
+    setDay(state.currentDay);
+  }
+
   function buildSliders() {
     const wrap = $("labParams");
     if (!wrap) return;
@@ -882,25 +944,33 @@
       const row = document.createElement("div");
       row.className = "lab-field" + (newSet.has(name) ? " glow" : "");
       row.dataset.param = name;
-      row.innerHTML =
-        `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}<span class="lab-note-inline">${def.note}</span></label><span class="lab-val" id="labVal_${name}"></span></div>` +
-        `<input type="range" id="labIn_${name}" min="${def.min}" max="${def.max}" step="${def.step}">`;
-      wrap.appendChild(row);
-      const input = row.querySelector("input");
-      state.inputs[name] = input;
-      input.addEventListener("input", () => {
-        // 连续拖动同一个滑块合并成一条撤销记录（400ms 内视为同一次拖动）；
-        // 但切到另一个滑块时，即使上一个滑块的 400ms 还没到期，也要立刻算新的一次操作——
-        // 否则连续快速拖两个不同参数会被误合并成一步撤销。
-        if (!state.dragTimer || state.dragParam !== name) pushHistory();
-        state.dragParam = name;
-        clearTimeout(state.dragTimer);
-        state.dragTimer = setTimeout(() => { state.dragTimer = null; state.dragParam = null; }, 400);
-        state.current[name] = Number(input.value);
-        const lbl = $("labVal_" + name);
-        if (lbl) lbl.textContent = fmt(Number(input.value)) + " " + def.unit;
-        setDay(state.currentDay);
-      });
+      if (def.type === "choice") {
+        row.innerHTML =
+          `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}<span class="lab-note-inline">${def.note}</span></label><span class="lab-val" id="labVal_${name}"></span></div>` +
+          `<div class="lab-choice-group" id="labIn_${name}">` +
+          def.options.map((o) => `<button type="button" class="lab-choice-btn" data-value="${o.value}">${o.label}</button>`).join("") +
+          `</div>`;
+        wrap.appendChild(row);
+        const group = row.querySelector(".lab-choice-group");
+        group.value = def.options[0].value; // 挂一个 .value 属性，让 setParam/syncSliders 能一致地读写
+        state.inputs[name] = group;
+        group.querySelectorAll(".lab-choice-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const v = Number(btn.dataset.value);
+            group.value = v;
+            group.querySelectorAll(".lab-choice-btn").forEach((b) => b.classList.toggle("active", b === btn));
+            commitParamChange(name, v);
+          });
+        });
+      } else {
+        row.innerHTML =
+          `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}<span class="lab-note-inline">${def.note}</span></label><span class="lab-val" id="labVal_${name}"></span></div>` +
+          `<input type="range" id="labIn_${name}" min="${def.min}" max="${def.max}" step="${def.step}">`;
+        wrap.appendChild(row);
+        const input = row.querySelector("input");
+        state.inputs[name] = input;
+        input.addEventListener("input", () => commitParamChange(name, Number(input.value)));
+      }
     });
   }
 
@@ -911,13 +981,26 @@
       if (!input || !lbl) return;
       input.value = state.current[name];
       lbl.textContent = fmt(Number(state.current[name])) + " " + PARAMS[name].unit;
+      if (PARAMS[name].type === "choice") {
+        input.querySelectorAll(".lab-choice-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.value) === state.current[name]));
+      }
     });
   }
 
   function setParam(name, value, animate) {
     const input = state.inputs[name];
     if (!input) return;
-    value = clamp(value, PARAMS[name].min, PARAMS[name].max);
+    const def = PARAMS[name];
+    if (def.type === "choice") {
+      // 离散选择没有"中间值"，补间动画没有意义——不管 animate 传没传都直接跳变。
+      input.value = value; state.current[name] = value;
+      input.querySelectorAll(".lab-choice-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.value) === value));
+      const lbl = $("labVal_" + name);
+      if (lbl) lbl.textContent = fmt(value) + " " + def.unit;
+      draw(state.currentDay / HORIZON); updateReadout();
+      return;
+    }
+    value = clamp(value, def.min, def.max);
     if (animate) {
       const from = Number(input.value), to = value, dur = 600, t0 = performance.now();
       function step(now) {
@@ -925,7 +1008,7 @@
         const v = from + (to - from) * k;
         input.value = v; state.current[name] = Number(v);
         const lbl = $("labVal_" + name);
-        if (lbl) lbl.textContent = fmt(Number(v)) + " " + PARAMS[name].unit;
+        if (lbl) lbl.textContent = fmt(Number(v)) + " " + def.unit;
         draw(state.currentDay / HORIZON); updateReadout();
         if (k < 1) requestAnimationFrame(step);
       }
@@ -933,7 +1016,7 @@
     } else {
       input.value = value; state.current[name] = value;
       const lbl = $("labVal_" + name);
-      if (lbl) lbl.textContent = fmt(value) + " " + PARAMS[name].unit;
+      if (lbl) lbl.textContent = fmt(value) + " " + def.unit;
       draw(state.currentDay / HORIZON); updateReadout();
     }
   }
@@ -1025,16 +1108,16 @@
     {
       icon: "🔻", color: "--green", name: "绿箭头（补货到货）",
       where: "顶部一个绿色向上箭头 + 「+N」件数",
-      why: "箭头指向「到货那一刻」在时间轴的位置 = 下单日 + 提前期",
+      why: "箭头指向「到货那一刻」在时间轴的位置 = 你选的下单日 + 提前期（物流方式决定）",
       biz: "货从下单到可售要等提前期，等太久就先断货",
       when: (p, m, si) => hasElement(si, "leadTime") && m.arrivalDay >= 0
     },
     {
-      icon: "⚌", color: "--amber", name: "琥珀横虚线（安全线）",
-      where: "一条水平的琥珀色虚线 + 「⚠ 安全线 N 件」",
-      why: "高度 = 安全天数 × 日销；绿线掉到这条线 = 立刻下单的信号",
-      biz: "不等售罄才补货，提前下单躲开缺货带",
-      when: (p, m, si) => hasElement(si, "safety") && p.safetyDays > 0
+      icon: "▏", color: "--amber", name: "参考建议虚线",
+      where: "一条竖向的琥珀色虚线 + 「📍 参考建议 第N天」",
+      why: "按预测和缓冲天数算出的建议下单点，只做参考、不会替你下单——你自己拖的【下单日】才是真正生效的那个",
+      biz: "帮你比较「我选的日子」跟「教科书建议」差多少",
+      when: (p, m, si) => hasElement(si, "safety") && m.refOrderDay >= 0
     },
     {
       icon: "▏", color: "--amber", name: "琥珀竖虚线（促销开始）",
@@ -1231,15 +1314,8 @@
     setTimeout(() => {
       playSweep(0, HORIZON, 1200, () => {
         setTimeout(() => {
-          // 3) 演示完恢复「你自己调过的值」，不是恢复成 baseline
-          Object.keys(S.demoTarget).forEach((k) => {
-            const lbl = $("labVal_" + k);
-            if (state.inputs[k] && lbl) {
-              state.inputs[k].value = userSnapshot[k];
-              lbl.textContent = fmt(userSnapshot[k]) + " " + PARAMS[k].unit;
-            }
-            state.current[k] = userSnapshot[k];
-          });
+          // 3) 演示完恢复「你自己调过的值」，不是恢复成 baseline（走 setParam 保证 choice 按钮高亮同步更新）
+          Object.keys(S.demoTarget).forEach((k) => { if (state.inputs[k]) setParam(k, userSnapshot[k], false); });
           showDemoBadge(false);
           setDay(HORIZON);
         }, 800);
@@ -1258,29 +1334,16 @@
     showDemoBadge(true);
 
     if (S.demoTarget) {
-      Object.keys(S.demoTarget).forEach((k) => {
-        const v = clamp(S.demoTarget[k], PARAMS[k].min, PARAMS[k].max);
-        if (state.inputs[k]) {
-          state.inputs[k].value = v;
-          const lbl = $("labVal_" + k);
-          if (lbl) lbl.textContent = fmt(v) + " " + PARAMS[k].unit;
-        }
-        state.current[k] = v;
-      });
+      // 走 setParam(..., false) 而不是手写 clamp+赋值——choice 类型没有 min/max，
+      // 直接复用 setParam 的分支逻辑，顺带同步按钮高亮。
+      Object.keys(S.demoTarget).forEach((k) => { if (state.inputs[k]) setParam(k, S.demoTarget[k], false); });
     }
     setDay(HORIZON);
 
     playSweep(0, HORIZON, 2400, () => {
       // 演示完恢复「用户自己调过的值」，不是 baseline（旧版会把你调过的参数无声改回默认值）
       if (S.demoTarget) {
-        Object.keys(S.demoTarget).forEach((k) => {
-          if (state.inputs[k]) {
-            state.inputs[k].value = userSnapshot[k];
-            const lbl = $("labVal_" + k);
-            if (lbl) lbl.textContent = fmt(userSnapshot[k]) + " " + PARAMS[k].unit;
-          }
-          state.current[k] = userSnapshot[k];
-        });
+        Object.keys(S.demoTarget).forEach((k) => { if (state.inputs[k]) setParam(k, userSnapshot[k], false); });
       }
       showDemoBadge(false);
       setDay(HORIZON);

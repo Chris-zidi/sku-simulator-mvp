@@ -996,6 +996,10 @@
     .lab-val { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
     .lab-note-inline { font-size: 10.5px; font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .lab-field input[type=range] { width: 100%; accent-color: var(--accent); }
+    .lab-choice-group { display: flex; flex-wrap: wrap; gap: 6px; }
+    .lab-choice-btn { flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 5px 8px; font-size: 11.5px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+    .lab-choice-btn:hover { border-color: var(--accent); }
+    .lab-choice-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
     .lab-nav { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .lab-nav button { font-size: 13px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
     .lab-nav .primary-btn, .lab-nav .ghost-btn { flex: 1; min-width: 90px; padding: 8px 10px; }
@@ -2105,8 +2109,8 @@
   });
 })();
 </script>
-<script src="teach-data.js?v=20260726q"></script>
-<script src="teach-core.js?v=20260726q"></script>
-<script src="lab-core.js?v=20260726q"></script>
+<script src="teach-data.js?v=20260726r"></script>
+<script src="teach-core.js?v=20260726r"></script>
+<script src="lab-core.js?v=20260726r"></script>
 </body>
 </html>
