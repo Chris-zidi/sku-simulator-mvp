@@ -954,7 +954,8 @@
     #labView { max-width: 1440px; margin: 0 auto; padding: 0 16px; flex: 1; min-height: 0; width: 100%; box-sizing: border-box; overflow: hidden; }
     #labView[hidden] { display: none; }
     .lab-wrap { height: 100%; }
-    .lab-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; height: 100%; padding: 10px 0; }
+    /* v0.13：三栏布局——图表 | 参数控制（窄，够用就行）| 教学文案（独立一栏，给足空间看长解释） */
+    .lab-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr) minmax(260px, 1.05fr); gap: 14px; height: 100%; padding: 10px 0; }
     /* --- 左：舞台（永不滚动，永远完整可见） --- */
     .lab-stage { height: 100%; display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-width: 0; min-height: 0; overflow: hidden; }
     .lab-stage-top { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: 8px; flex-wrap: wrap; }
@@ -976,10 +977,9 @@
     .lab-actions { display: flex; gap: 8px; margin-top: 8px; flex-shrink: 0; }
     .lab-actions .primary-btn { flex: 1; min-width: 0; }
     .lab-actions .ghost-btn { flex: 1; min-width: 0; }
-    /* --- 右：侧栏（顶部固定操作区 + 下方独立滚动讲解区） --- */
-    .lab-side { height: 100%; display: flex; flex-direction: column; min-height: 0; }
-    .lab-side-fixed { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; flex-shrink: 0; margin-bottom: 8px; }
-    .lab-side-fixed h2 { font-size: 15px; margin: 0 0 6px; line-height: 1.35; }
+    /* --- 中：参数控制栏（窄，够放滑块+按钮就行，自己可以滚） --- */
+    .lab-controls { height: 100%; min-height: 0; overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+    .lab-controls h2 { font-size: 14px; margin: 0 0 6px; line-height: 1.35; }
     .lab-elements { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
     .lab-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); white-space: nowrap; transition: all .2s; }
     .lab-chip.done { color: var(--ink-soft); border-color: var(--green); opacity: .92; }
@@ -1001,7 +1001,8 @@
     .lab-nav .primary-btn, .lab-nav .ghost-btn { flex: 1; min-width: 90px; padding: 8px 10px; }
     .lab-nav button.icon-only { flex: 0 0 auto; min-width: 0; padding: 8px 12px; }
     .lab-nav button:disabled { opacity: .4; cursor: not-allowed; }
-    .lab-scroll { flex: 1; min-height: 0; overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+    /* --- 右：教学文案栏（独立一整栏，不用跟参数抢空间） --- */
+    .lab-lesson { height: 100%; min-height: 0; overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
     .lab-hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin: 12px 0 0; border-top: 1px dashed var(--line); padding-top: 10px; }
     /* ===== 侧栏可折叠卡片 ===== */
     .lab-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 0; margin-bottom: 10px; overflow: hidden; }
@@ -1038,8 +1039,8 @@
       #labView { height: auto; overflow: visible; padding: 0 12px 40px; }
       .lab-grid { grid-template-columns: 1fr; height: auto; }
       .lab-stage { height: 55vh; min-height: 340px; }
-      .lab-side { height: auto; }
-      .lab-scroll { max-height: 60vh; }
+      .lab-controls { height: auto; max-height: 40vh; }
+      .lab-lesson { height: auto; max-height: 60vh; }
       .ro-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
@@ -1449,40 +1450,38 @@
               <button class="ghost-btn" id="labReset">↺ 重置本课题</button>
             </div>
           </div>
-          <aside class="lab-side">
-            <div class="lab-side-fixed">
-              <h2 id="labTitle"></h2>
-              <div class="lab-nodecard" id="labNodeCard"></div>
-              <div class="lab-params" id="labParams"></div>
-              <div class="lab-nav">
-                <button class="icon-only" id="labUndo" title="撤销 Ctrl+Z">↶</button>
-                <button class="icon-only" id="labRedo" title="重做 Ctrl+Shift+Z">↷</button>
-                <button class="ghost-btn" id="labPrev">← 上一步</button>
-                <button class="ghost-btn" id="labDemo">▶ 看演示</button>
-                <button class="primary-btn" id="labNext">下一步 →</button>
-              </div>
+          <aside class="lab-controls">
+            <h2 id="labTitle"></h2>
+            <div class="lab-nodecard" id="labNodeCard"></div>
+            <div class="lab-params" id="labParams"></div>
+            <div class="lab-nav">
+              <button class="icon-only" id="labUndo" title="撤销 Ctrl+Z">↶</button>
+              <button class="icon-only" id="labRedo" title="重做 Ctrl+Shift+Z">↷</button>
+              <button class="ghost-btn" id="labPrev">← 上一步</button>
+              <button class="ghost-btn" id="labDemo">▶ 看演示</button>
+              <button class="primary-btn" id="labNext">下一步 →</button>
             </div>
-            <div class="lab-scroll">
-              <!-- ① 本关学啥 -->
-              <details class="lab-card" open>
-                <summary>📚 本关学啥</summary>
-                <div class="lab-intro" id="labIntro"></div>
-              </details>
+          </aside>
+          <aside class="lab-lesson">
+            <!-- ① 本关学啥 -->
+            <details class="lab-card" open>
+              <summary>📚 本关学啥</summary>
+              <div class="lab-intro" id="labIntro"></div>
+            </details>
 
-              <!-- ② 图上现在有什么（动态图例，跟画布一一对应） -->
-              <details class="lab-card lab-legend" id="labLegend" open></details>
+            <!-- ② 图上现在有什么（动态图例，跟画布一一对应） -->
+            <details class="lab-card lab-legend" id="labLegend" open></details>
 
-              <!-- ③ 怎么操作 -->
-              <details class="lab-card">
-                <summary>🎮 怎么拖 / 👀 看什么变化</summary>
-                <div class="lab-instruct" id="labInstruct"></div>
-                <div class="lab-observe" id="labObserve"></div>
-              </details>
+            <!-- ③ 怎么操作 -->
+            <details class="lab-card">
+              <summary>🎮 怎么拖 / 👀 看什么变化</summary>
+              <div class="lab-instruct" id="labInstruct"></div>
+              <div class="lab-observe" id="labObserve"></div>
+            </details>
 
-              <!-- ④ 几何词典（通用词汇，可回看） -->
-              <div class="lab-dict" id="labDict"></div>
-              <p class="lab-hint">搭积木式：图是一步步「长」出来的——每关只加一个新元素，只让你动当前关的滑块。先看演示、再自己拖一遍，观察曲线和读数怎么变，懂了再点「下一步」。支持 Ctrl+Z 撤销 / Ctrl+Shift+Z 重做。</p>
-            </div>
+            <!-- ④ 几何词典（通用词汇，可回看） -->
+            <div class="lab-dict" id="labDict"></div>
+            <p class="lab-hint">搭积木式：图是一步步「长」出来的——每关只加一个新元素，只让你动当前关的滑块。先看演示、再自己拖一遍，观察曲线和读数怎么变，懂了再点「下一步」。支持 Ctrl+Z 撤销 / Ctrl+Shift+Z 重做。</p>
           </aside>
         </div>
       </div>
@@ -2106,8 +2105,8 @@
   });
 })();
 </script>
-<script src="teach-data.js?v=20260726p"></script>
-<script src="teach-core.js?v=20260726p"></script>
-<script src="lab-core.js?v=20260726p"></script>
+<script src="teach-data.js?v=20260726q"></script>
+<script src="teach-core.js?v=20260726q"></script>
+<script src="lab-core.js?v=20260726q"></script>
 </body>
 </html>
