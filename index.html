@@ -956,11 +956,16 @@
     .lab-wrap { height: 100%; }
     /* v0.14.3：图表舞台挪到正中间当「主角」，参数控制/教学文案分列两侧——之前图表挤在最左边只分到
        1.25/3.05 的份额，且整个 #labView 封顶 1440px，1920 宽屏实测图表只有 ~540px CSS 宽，用户反馈
-       "太局限了"。现在图表拿 1.9fr（约 55%~60%），#labView 上限也放宽到 1680px，宽屏下图表能长到
-       900px+ CSS 宽。三栏视觉顺序靠 order 而不是改 DOM 顺序（HTML 里 .lab-stage 仍是第一个子元素，
-       JS 里没有任何代码依赖这三个 <aside>/<div> 的 DOM 先后顺序，用 order 风险最低）；窄屏堆叠时
-       order 会被下面 1100px 断点里的规则覆盖回"图表在最上面"，不会变成参数栏堆在最上面。 */
-    .lab-grid { display: grid; grid-template-columns: minmax(230px, 0.62fr) minmax(460px, 1.9fr) minmax(260px, 0.85fr); gap: 14px; height: 100%; padding: 10px 0; }
+       "太局限了"。现在图表份额最大（见下方 grid-template-columns），#labView 上限也放宽到 1680px，
+       宽屏下图表能长到 850px+ CSS 宽。三栏视觉顺序靠 order 而不是改 DOM 顺序（HTML 里 .lab-stage
+       仍是第一个子元素，JS 里没有任何代码依赖这三个 <aside>/<div> 的 DOM 先后顺序，用 order 风险
+       最低）；窄屏堆叠时 order 会被下面 1100px 断点里的规则覆盖回"图表在最上面"，不会变成参数栏
+       堆在最上面。 */
+    /* v0.14.4：文案栏地板从 260px 提到 320px、份额从 0.85fr 提到 0.95fr（图表份额从 1.9fr 让出一点
+       给 0.75fr）——文案栏是三栏里唯一装长句子的一栏，v0.14.3 只顾着把图表做大，1290px 这种常见的
+       笔记本窗口宽度下文案栏被压到 292px，中文长句每行只能塞 12~14 字，读起来像被截断（用户反馈
+       "下面的文字被截断了"）。图表依然是主角，只是不能为了大而把唯一负责"读"的那栏挤到不能用。 */
+    .lab-grid { display: grid; grid-template-columns: minmax(230px, 0.62fr) minmax(460px, 1.75fr) minmax(320px, 0.95fr); gap: 14px; height: 100%; padding: 10px 0; }
     .lab-controls { order: 1; }
     .lab-stage { order: 2; }
     .lab-lesson { order: 3; }
@@ -969,13 +974,22 @@
     .lab-stage-top { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: 8px; flex-wrap: wrap; }
     .lab-logic { background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; flex-shrink: 0; }
     .lab-step { font-size: 12px; color: var(--muted); flex-shrink: 0; }
-    .lab-canvas-box { flex: 1; min-height: 0; min-width: 0; display: flex; }
+    /* min-height 不能是 0——chips 行/读数面板都是 flex-shrink:0 的兄弟节点，行数随关卡累计增多
+       （促销关读数有 12 行），矮屏幕（比如 1290×700 的窗口）下画布会被一路挤到 170px 高，y 轴
+       5 档刻度标签挤不下会互相压字。给画布一个不容妥协的地板，宁可读数面板在极端情况下被裁掉
+       一点（.lab-stage 本身 overflow:hidden），也不能让核心图表本身糊成一团。 */
+    .lab-canvas-box { flex: 1; min-height: 280px; min-width: 0; display: flex; }
     .lab-canvas-box canvas { width: 100%; height: 100%; display: block; border-radius: 10px; background: var(--surface-2); }
     .lab-playbar { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-shrink: 0; }
     .lab-playbar button { font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; flex-shrink: 0; }
     .lab-playbar input[type=range] { flex: 1; accent-color: var(--accent); }
     .lab-playbar .lab-day-label { font-size: 12px; color: var(--muted); width: 74px; text-align: right; flex-shrink: 0; }
-    .lab-readout { margin-top: 8px; flex-shrink: 0; }
+    /* 读数面板行数随关卡累计增多（促销关 12 行），矮屏幕下画布先顶住 280px 地板，读数面板作为
+       "情报补充"（图上已经能看到大部分信息）该让位——原来 flex-shrink:0 让它永不收缩，结果矮屏幕
+       下超出的部分被 .lab-stage 的 overflow:hidden 默默裁掉，用户根本看不出来还有内容。现在允许
+       它收缩、超出自身高度时自己滚动（不是被外层裁切），矮屏幕下多出来的行还能滚动看到，不会
+       无声消失。 */
+    .lab-readout { margin-top: 8px; flex-shrink: 1; min-height: 0; overflow-y: auto; }
     .ro-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
     .ro-cell { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px; }
     .ro-k { display: block; font-size: 10.5px; color: var(--muted); }
@@ -2142,8 +2156,8 @@
   });
 })();
 </script>
-<script src="teach-data.js?v=20260726v"></script>
-<script src="teach-core.js?v=20260726v"></script>
-<script src="lab-core.js?v=20260726v"></script>
+<script src="teach-data.js?v=20260727a"></script>
+<script src="teach-core.js?v=20260727a"></script>
+<script src="lab-core.js?v=20260727a"></script>
 </body>
 </html>

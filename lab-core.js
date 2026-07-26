@@ -1252,6 +1252,9 @@
     syncSliders();
     state.lastLegendKey = null;
     freezeStageYAxis();
+    // 顺序原因见 applyStage() 里的注释：读数行数落定之后再量画布尺寸，不然量到过渡态。
+    updateReadout();
+    resizeCanvas();
     setDay(HORIZON);
     updateNavButtons();
   }
@@ -1305,6 +1308,14 @@
     renderStageChrome();
     updateNavButtons();
     freezeStageYAxis();
+    // 先把读数面板刷新到位——它的行数随关卡变化（比如"参考建议日"这一行只在安全关起才出现），
+    // 而它是画布的 flex 兄弟节点，行数一变，画布能分到的高度也跟着变。resizeCanvas() 必须在
+    // chips（renderStageChrome 已处理）和读数行数都落定之后再量，否则量到的是过渡态的尺寸——
+    // canvas.width/height（像素缓冲区）跟 clientWidth/Height（最终 CSS 尺寸）对不上，浏览器会把
+    // 旧像素内容拉伸/压扁塞进新框，文字看起来"变形"，只有下次 window resize 才会再校准一次。
+    // updateReadout() 这里多调一次是幂等的（下面 setDay() 内部还会再调一次），不会有副作用。
+    updateReadout();
+    resizeCanvas();
     setDay(HORIZON);
   }
 
