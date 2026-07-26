@@ -243,7 +243,9 @@
     redoStack: [],
     dragTimer: null,
     dragParam: null,
-    lastLegendKey: null
+    lastLegendKey: null,
+    stageYTicks: [0, 3000, 6000, 9000, 12000], // 本关冻结的 y 轴刻度，见 freezeStageYAxis()
+    eventHitboxes: [] // 事件轨每个标签的点击区域（画布 CSS 像素坐标），见 draw() 末尾
   };
 
   /* ---------- 计算库存序列（clamp 到 0，不再出现负库存）---------- */
@@ -348,16 +350,94 @@
   function cssVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
   }
-  // 生成 4 档「好看」刻度（如 yMax=3200 → [0, 1000, 2000, 3000]）
-  function makeTicks(yMax, n) {
-    const step = Math.pow(10, Math.floor(Math.log10(yMax / n)));
-    const nice = [1, 2, 2.5, 5, 10].map((m) => m * step);
-    const s = nice.find((v) => v * (n - 1) >= yMax) || step;
-    const out = [];
-    for (let v = 0; v <= yMax + 0.001; v += s) out.push(Math.round(v));
-    if (out[out.length - 1] < yMax) out.push(Math.round(out[out.length - 1] + s));
-    return out;
+  // v0.12：贴合数据的「好看」刻度——在 [1,2,2.5,5]×10^n 里找一个分 3~5 档、
+  // 且顶部刻度最贴近 dataMax 的组合（老版本 makeTicks 只保证 >=n 档，经常把顶部撑
+  // 到远超数据本身，曲线因此被压缩进画布底部一小条，是 v0.12 要修的核心问题）。
+  function niceTop(dataMax) {
+    if (!(dataMax > 0)) dataMax = 100;
+    const candidates = [];
+    for (let e = 0; e <= 6; e++) {
+      for (const m of [1, 2, 2.5, 5]) {
+        const step = m * Math.pow(10, e);
+        const seg = Math.ceil(dataMax / step);
+        if (seg >= 3 && seg <= 5) candidates.push({ step, seg });
+      }
+    }
+    candidates.sort((a, b) => (a.step * a.seg) - (b.step * b.seg));
+    const best = candidates[0] || { step: dataMax / 4, seg: 4 };
+    const ticks = [];
+    for (let i = 0; i <= best.seg; i++) ticks.push(Math.round(i * best.step));
+    return ticks;
   }
+
+  // v0.12：进关时按当前参数把 y 轴顶「冻结」一次——之后无论拖哪个滑块都不重新计算，
+  // 完整保住 v0.10 那条「被拖动的维度必须锁死坐标域」的铁律（否则日销拖大→曲线变陡的
+  // 同时纵轴也跟着变，两个变化会互相抵消，用户完全看不出线变了）。
+  // 坐标系关例外：它固定 0~12000，因为期初库存滑块本身就是这一关的教学对象，
+  // 量程必须覆盖滑块全程，不能按「今天」这一个瞬时值来定。
+  function freezeStageYAxis() {
+    if (state.stageIndex === stageIndexOf("axis")) {
+      state.stageYTicks = [0, 3000, 6000, 9000, 12000];
+      return;
+    }
+    const series = computeSeries(state.stageIndex);
+    const peak = Math.max(state.current.inventory, ...series.inv);
+    state.stageYTicks = niceTop(peak);
+  }
+  // 拖参数导致库存冲出已冻结的顶——只涨不缩，缩回去时轴不跟着缩（同一条铁律）。
+  function growStageYAxisIfNeeded(liveDataMax) {
+    if (state.stageIndex === stageIndexOf("axis")) return;
+    const curTop = state.stageYTicks[state.stageYTicks.length - 1];
+    if (liveDataMax > curTop) {
+      const grown = niceTop(liveDataMax);
+      if (grown[grown.length - 1] > curTop) state.stageYTicks = grown;
+    }
+  }
+
+  // 图内标注贴着自己的元素画，但元素本身的高度会随参数变化——曲线被拖到接近顶部
+  // 或接近 0 线时，贴着它的标签可能冲出画布顶部（撞事件轨）、底部（撞 x 轴日期文字），
+  // 或撞进缺货带/压仓块占用的那一小条固定区域（贴着 0 线，与参数无关）。
+  // 压力测试发现的真实 bug（极端安全天数/促销系数/日销组合下命中）：统一夹一下。
+  function clampLabelY(yy, padTop, H, zeroY, avoidBottomBand) {
+    let hi = H - 24;
+    if (avoidBottomBand) hi = Math.min(hi, zeroY - 24);
+    return clamp(yy, padTop + 10, hi);
+  }
+
+  // v0.12 通用避让兜底：clampLabelY 只能把单个标签推离边界，但多个标签被推到
+  // 同一个夹紧值时还是会叠在一起（压力测试在极端安全天数+促销组合下就复现了）。
+  // 这里做一遍真正的贪心避让——收集所有「浮动」标签，按加入顺序两两检测包围盒，
+  // 撞了就把后来者继续下推，直到不再冲突；fixed:true 的（缺货带/压仓块）当障碍物但自己不挪。
+  function placeLabels(ctx, items, minY, maxY) {
+    const boxed = items.map((it) => {
+      ctx.font = it.font;
+      const w = ctx.measureText(it.text).width;
+      let x0 = it.x;
+      if (it.align === "center") x0 = it.x - w / 2;
+      else if (it.align === "right") x0 = it.x - w;
+      return Object.assign({}, it, { w, x0, x1: x0 + w, finalY: it.y });
+    });
+    boxed.forEach((it, i) => {
+      if (it.fixed) return;
+      for (let guard = 0; guard < 8; guard++) {
+        const hit = boxed.find((p, j) => j !== i && Math.abs(it.finalY - p.finalY) < 13 && it.x0 < p.x1 && p.x0 < it.x1);
+        if (!hit) break;
+        const down = hit.finalY + 13, up = hit.finalY - 13;
+        // 往下挪会撞进 x 轴日期文字（maxY）就改往上挪；上下都出界（画布太矮）才夹住，
+        // 容忍极端情况下的轻微重叠——比起把标签推出画布，这是更小的代价。
+        if (down <= maxY && (up < minY || Math.abs(down - it.y) <= Math.abs(up - it.y))) it.finalY = down;
+        else if (up >= minY) it.finalY = up;
+        else break;
+      }
+      it.finalY = clamp(it.finalY, minY, maxY);
+    });
+    boxed.forEach((it) => {
+      ctx.fillStyle = cssVar(it.color); ctx.font = it.font; ctx.textAlign = it.align;
+      ctx.fillText(it.text, it.x, it.finalY);
+    });
+    ctx.textAlign = "left";
+  }
+
   function resizeCanvas() {
     const c = state.canvas;
     if (!c) return;
@@ -385,6 +465,46 @@
     ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.stroke();
   }
 
+  // v0.12：顶部事件轨——把「某一天发生了什么」统一搬到画布顶部一条轨道上，
+  // 不再散落在曲线周围写死坐标（那是上一版挤成一团的根因）。横向贪心避让，放不下就
+  // 换行；点标签可点击，点击后播放头跳到那一天（复用 setDay，见 init() 里的 click 监听）。
+  function buildEventItems(si, els, m, p) {
+    const items = [];
+    const selloutM = selloutMoment(si, m);
+    if (els.has("sellout") && selloutM >= 0) {
+      items.push({ key: "sellout", day: selloutM, label: "售罄 " + selloutDayLabel(si, m), color: "--red" });
+    }
+    if (els.has("leadTime") && m.orderDay >= 0) {
+      items.push({ key: "order", day: m.orderDay, label: "下单 第" + (m.orderDay + 1) + "天", color: "--amber" });
+    }
+    const replenishQty = els.has("forecast") ? m.suggestedQty : p.replenish;
+    if (els.has("leadTime") && m.arrivalDay >= 0 && replenishQty > 0) {
+      items.push({ key: "arrival", day: m.arrivalDay, label: "到货 +" + fmt(replenishQty), color: "--green" });
+    }
+    if (els.has("promo") && p.promo > 1) {
+      items.push({ key: "promoStart", day: p.promoDay, label: "促销 第" + (p.promoDay + 1) + "天", color: "--amber" });
+    }
+    return items;
+  }
+  // 横向贪心避让：按 x 排序，放不下同一行（与上一个的间距 < 8px）就另起一行
+  function layoutEventRows(ctx, items, x) {
+    ctx.font = "10.5px sans-serif";
+    const boxed = items.map((it) => {
+      const w = ctx.measureText(it.label).width + 16;
+      const cx = x(it.day);
+      return Object.assign({}, it, { w, cx, x0: cx - w / 2, x1: cx + w / 2 });
+    }).sort((a, b) => a.cx - b.cx);
+    const rows = [];
+    boxed.forEach((it) => {
+      let placed = false;
+      for (const row of rows) {
+        if (it.x0 > row[row.length - 1].x1 + 8) { row.push(it); placed = true; break; }
+      }
+      if (!placed) rows.push([it]);
+    });
+    return rows;
+  }
+
   function draw(dayFraction, stageIndex) {
     const c = state.canvas, ctx = state.ctx;
     if (!c || !ctx) return;
@@ -397,23 +517,31 @@
     const inv = series.inv;
     const m = series.metrics;
     const p = state.current;
+    // 缺货带/压仓块贴着 0 线占了一小条固定区域，其它下沉标签要避开它（见 clampLabelY）
+    const hasBottomBand = els.has("sellout") && m.stockoutDays > 0;
 
-    const padL = 60, padR = 16, padT = 22, padB = 30;
+    const padL = 60, padR = 16, padB = 30;
     const plotW = W - padL - padR;
+    const xMax = HORIZON;
+    const x = (d) => padL + (clamp(d, 0, xMax) / xMax) * plotW;
+
+    // 事件轨布局要先算（决定占几行），才能定 padT——横向计算只依赖 x()，不依赖 y()，无需等 padT。
+    const eventItems = si === AXIS_STAGE ? [] : buildEventItems(si, els, m, p);
+    const eventRows = eventItems.length ? layoutEventRows(ctx, eventItems, x) : [];
+    const hasBracket = els.has("leadTime") && m.orderDay >= 0 && m.arrivalDay >= 0;
+    const trackRowH = 16, trackTopPad = 8;
+    const trackRowCount = eventRows.length + (hasBracket ? 1 : 0);
+    const padT = si === AXIS_STAGE ? 22 : trackTopPad + Math.max(1, trackRowCount) * trackRowH + 6;
     const plotH = H - padT - padB;
 
-    // —— 坐标轴固定，不随「被拖动的日销」联动缩放（这是 v0.10 的核心修复）——
-    // 横轴恒为 180 天；纵轴只跟「期初库存 + 补货量」这类会真正抬高库存上限的输入相关，
-    // 不受日销/促销/售罄造成的负值影响——避免两层自动缩放叠加互相抵消。
-    // 注意：yMax 必须取「最高一条刻度线」的值，而不是任意常数——否则刻度标签（如 15千）
-    // 和它实际画的像素位置会对不上（数值被 clamp 到 yMax，但标签写的是更大的刻度值）。
-    const xMax = HORIZON;
-    const replenishForScale = els.has("forecast") ? m.suggestedQty : p.replenish;
-    const yMaxBase = si === AXIS_STAGE ? 12000 : Math.max(12000, p.inventory + (replenishForScale || 0));
-    const yTicks = (si === AXIS_STAGE) ? [0, 3000, 6000, 9000, 12000] : makeTicks(yMaxBase, 4);
+    // —— 坐标轴固定，不随「被拖动的日销」联动缩放（v0.10 铁律）——
+    // 横轴恒为 180 天。纵轴 v0.12 起改成「进关时冻结、按本关数据贴合」：freezeStageYAxis()
+    // 在 applyStage()/restoreSnapshot() 里算一次，这里只读 state.stageYTicks，不重新计算——
+    // 拖任何滑块坐标轴都不变，同一条铁律；数据冲出已冻结的顶时 growStageYAxisIfNeeded() 只涨不缩。
+    growStageYAxisIfNeeded(Math.max(p.inventory, ...inv));
+    const yTicks = state.stageYTicks;
     const yMax = yTicks[yTicks.length - 1];
     const yMin = 0;
-    const x = (d) => padL + (clamp(d, 0, xMax) / xMax) * plotW;
     const y = (v) => padT + plotH - ((clamp(v, yMin, yMax) - yMin) / (yMax - yMin)) * plotH;
     const zeroY = y(0);
 
@@ -441,7 +569,7 @@
     });
     ctx.textAlign = "left";
 
-    // 第 1 关：横线 + 大字标"这是你的家底"（不画填充）
+    // 第 1 关：横线 + 大字标"这是你的家底"（不画填充，也没有事件轨）
     if (si === AXIS_STAGE) {
       ctx.strokeStyle = cssVar("--green"); ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.moveTo(x(0), y(p.inventory)); ctx.lineTo(x(HORIZON), y(p.inventory)); ctx.stroke();
@@ -450,11 +578,20 @@
       ctx.fillStyle = cssVar("--muted"); ctx.font = "12px sans-serif";
       ctx.fillText("下面会教：让它一天天掉、撞到 0、撞到之前补货回来……", W / 2, padT + 42);
       ctx.textAlign = "left";
+      state.eventHitboxes = [];
       renderNodeCard(0, si, series);
       return;
     }
 
     const progDay = clamp(Math.round(dayFraction * HORIZON), 0, HORIZON);
+
+    // 事件轨的淡竖参考线：先画（在曲线下面），指向那一天在曲线上的位置
+    eventItems.forEach((it) => {
+      if (it.day > progDay) return;
+      ctx.strokeStyle = cssVar(it.color); ctx.globalAlpha = 0.35; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x(it.day), padT); ctx.lineTo(x(it.day), padT + plotH); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    });
 
     // 绿色有货区（库存线下方到 0 的填充）
     ctx.fillStyle = "rgba(23,121,87,0.18)";
@@ -471,7 +608,13 @@
     }
     ctx.stroke();
 
-    // 红色缺货带（售罄关起）：0 线上方的窄带，不再画负库存
+    // v0.12：图内还会互相打架的几个标签（缺货带/压仓块/斜率/安全线/预测计划）不再各自
+    // 直接 fillText——先收集进 pendingLabels，画完所有图形元素后统一交给 placeLabels()
+    // 做一遍贪心避让，撞了就顺延，不会再出现「都被夹到同一行」的情况。
+    const pendingLabels = [];
+
+    // 红色缺货带（售罄关起）：0 线上方的窄带，不再画负库存。
+    // 件数/金额移到侧栏读数「缺货情况」「少赚金额」，图上只留「缺货 N 天」短锚点。
     if (els.has("sellout") && m.stockoutDays > 0) {
       const startMoment = selloutMoment(si, m);
       const endDay = (hasElement(si, "leadTime") && m.arrivalDay >= 0) ? m.arrivalDay : HORIZON;
@@ -481,18 +624,13 @@
         ctx.fillStyle = "rgba(184,60,52,0.30)";
         ctx.fillRect(Math.min(sX, eX), zeroY - bandH, Math.max(2, eX - sX), bandH);
         if (progDay - startMoment > 8) {
-          ctx.fillStyle = cssVar("--red"); ctx.font = "11px sans-serif"; ctx.textAlign = "center";
-          // Forecast 关起，缺货带的标注要把「少赚多少钱」直接写出来——这是本轮修复要解决的核心：
-          // 之前预测偏差只影响一条平行虚线，看不出任何后果；现在少卖的件数直接换算成钱。
-          const moneyTxt = els.has("forecast") ? " · 少赚 ¥" + fmt(m.lostMoney) : "";
-          ctx.fillText("🟥 缺货 " + m.stockoutDays + " 天 · 少卖约 " + fmt(m.lostSales) + " 件" + moneyTxt, (sX + eX) / 2, zeroY - bandH - 4);
-          ctx.textAlign = "left";
+          pendingLabels.push({ text: "🟥 缺货 " + m.stockoutDays + " 天", x: (sX + eX) / 2, y: zeroY - bandH - 4, align: "center", font: "11px sans-serif", color: "--red", fixed: true });
         }
       }
     }
 
-    // 压仓块（Forecast 关起）：期末还剩的库存画成右侧一块灰蓝色矩形 + 占用资金标注——
-    // 回答「预测偏高会怎样」：货没断，但钱被压在仓库里没变现。
+    // 压仓块（Forecast 关起）：期末还剩的库存画成右侧一块灰蓝色矩形——
+    // 回答「预测偏高会怎样」：货没断，但钱被压在仓库里没变现。占用金额移到侧栏「压仓占用」。
     if (els.has("forecast") && m.endInv > 0 && progDay === HORIZON) {
       const boxW = 14;
       const bx = x(HORIZON) - boxW;
@@ -501,9 +639,7 @@
       ctx.fillRect(bx, by, boxW, zeroY - by);
       ctx.strokeStyle = "rgba(110,130,160,0.9)"; ctx.lineWidth = 1;
       ctx.strokeRect(bx, by, boxW, zeroY - by);
-      ctx.fillStyle = cssVar("--ink"); ctx.font = "bold 11px sans-serif"; ctx.textAlign = "right";
-      ctx.fillText("🏚 压仓 " + fmt(m.endInv) + " 件 · 占用 ¥" + fmt(m.overstockMoney), x(HORIZON) - boxW - 6, by + 12);
-      ctx.textAlign = "left";
+      pendingLabels.push({ text: "🏚 压仓 " + fmt(m.endInv) + " 件", x: x(HORIZON) - boxW - 6, y: clampLabelY(by + 12, padT, H, zeroY, false), align: "right", font: "bold 11px sans-serif", color: "--ink", fixed: true });
     }
 
     // 斜线中点 + 终点 教学标签（日销关，让"日销 = 斜率"一眼可见，只在这一关出现一次）
@@ -519,7 +655,7 @@
       ctx.textAlign = "left";
     }
 
-    // 预测线（第 4 关起，虚线）
+    // 预测线（Forecast 关起，虚线）——覆盖天数差距已在侧栏「预测覆盖」讲清楚，图上不重复
     if (els.has("forecast") && series.invF) {
       ctx.strokeStyle = cssVar("--purple"); ctx.setLineDash([6, 4]); ctx.lineWidth = 2;
       ctx.beginPath();
@@ -528,36 +664,28 @@
         if (d === 0) ctx.moveTo(x(d), yy); else ctx.lineTo(x(d), yy);
       }
       ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = cssVar("--purple"); ctx.font = "11px sans-serif";
-      ctx.fillText("你的预测（计划）", padL + plotW - 100, y(series.invF[progDay]) - 6);
-      // 图上直接标注预测覆盖 vs 真实覆盖的差距
-      if (progDay > 20) {
-        const gap = Math.round(m.coverForecast - m.coverDemand);
-        if (Math.abs(gap) >= 1) {
-          ctx.fillStyle = cssVar("--purple"); ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
-          ctx.fillText((gap < 0 ? "预测覆盖比真实少 " + Math.abs(gap) : "预测覆盖比真实多 " + gap) + " 天", padL + 8, padT + 16);
-          ctx.textAlign = "left";
-        }
+      // 标签放在「线还没跌进底部拥挤区」且预测/真实两线差距最大的那一天——
+      // 固定挂在最右端会跟压仓块打架，固定挂在中段又可能撞进缺货带的地盘，两者位置都不稳定；
+      // 真撞上了还有 placeLabels() 兜底。
+      let labelDay = 0, bestGap = -1;
+      for (let d = 0; d <= progDay; d += 5) {
+        if (series.invF[d] < yMax * 0.18) continue; // 避开底部拥挤区（缺货带/压仓块都贴着 0 线）
+        const gap = Math.abs(series.invF[d] - inv[d]);
+        if (gap > bestGap) { bestGap = gap; labelDay = d; }
       }
+      pendingLabels.push({ text: "你的预测（计划）", x: x(labelDay) + 6, y: clampLabelY(y(series.invF[labelDay]) - 8, padT, H, zeroY, hasBottomBand), align: "left", font: "11px sans-serif", color: "--purple" });
     }
 
-    // 促销起点竖线（第 7 关、且 promo>1）
+    // 促销：竖虚线（哪天开始）已并入事件轨统一画，这里只留贴着拐点的斜率标签 + 节点圆点
     if (els.has("promo") && p.promo > 1 && p.promoDay <= progDay) {
       const px = x(p.promoDay);
-      ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = cssVar("--amber"); ctx.font = "11px sans-serif";
-      ctx.fillText("促销开始", px - 16, padT + 12);
-      // 节点：促销拐点，标注斜率如何被放大
       drawNodeDot(ctx, px, y(inv[Math.min(p.promoDay, progDay)]), cssVar("--amber"));
       if (progDay > p.promoDay + 5) {
-        ctx.fillStyle = cssVar("--amber"); ctx.font = "bold 11px sans-serif"; ctx.textAlign = "left";
-        ctx.fillText("斜率 × " + p.promo + " = 每天少 " + fmt(p.demand * p.promo) + " 件", px + 8, y(inv[Math.min(p.promoDay, progDay)]) + 16);
-        ctx.textAlign = "left";
+        pendingLabels.push({ text: "斜率 × " + p.promo + " = 每天少 " + fmt(p.demand * p.promo) + " 件", x: px + 8, y: clampLabelY(y(inv[Math.min(p.promoDay, progDay)]) + 16, padT, H, zeroY, hasBottomBand), align: "left", font: "bold 11px sans-serif", color: "--amber" });
       }
     }
 
-    // 安全库存警戒线（第 6 关起，琥珀横向虚线；高度 = 安全天数 × 日销）
+    // 安全库存警戒线（安全关起，琥珀横向虚线；高度 = 安全天数 × 日销）
     if (els.has("safety") && p.safetyDays > 0 && p.demand > 0) {
       const safeLevel = p.safetyDays * p.demand;
       if (safeLevel < yMax) {
@@ -565,36 +693,17 @@
         ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([7, 5]); ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(padL, sy); ctx.lineTo(padL + plotW, sy); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = cssVar("--amber"); ctx.font = "bold 11px sans-serif";
-        ctx.fillText("⚠ 安全线 " + fmt(safeLevel) + " 件（" + p.safetyDays + " 天 × 日销）", padL + 6, sy - 6);
-        // 节点：库存线与安全线的交点 = 该下单的那一刻
+        pendingLabels.push({ text: "⚠ 安全线 " + fmt(safeLevel) + " 件（" + p.safetyDays + " 天 × 日销）", x: padL + 6, y: clampLabelY(sy - 6, padT, H, zeroY, hasBottomBand), align: "left", font: "bold 11px sans-serif", color: "--amber" });
+        // 节点：库存线与安全线的交点 = 该下单的那一刻（何时下单已在事件轨讲，这里只留圆点锚定位置）
         if (m.orderDay >= 0 && m.orderDay <= progDay) {
-          const ox = x(m.orderDay);
-          drawNodeDot(ctx, ox, sy, cssVar("--amber"));
-          ctx.fillStyle = cssVar("--amber"); ctx.font = "11px sans-serif"; ctx.textAlign = "left";
-          ctx.fillText("👉 覆盖到这天=该下单了", ox + 6, sy + 14);
-          ctx.textAlign = "left";
+          drawNodeDot(ctx, x(m.orderDay), sy, cssVar("--amber"));
         }
       }
     }
 
-    // 补货箭头（补货关起）：Forecast 关起补货量不再是手动滑块，改成按预测自动算出的 suggestedQty
-    const replenishQtyForDraw = els.has("forecast") ? m.suggestedQty : p.replenish;
-    if (els.has("leadTime") && m.arrivalDay >= 0 && m.arrivalDay <= progDay && replenishQtyForDraw > 0) {
-      const ax = x(m.arrivalDay);
-      ctx.strokeStyle = cssVar("--green"); ctx.fillStyle = cssVar("--green"); ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(ax, padT + 4); ctx.lineTo(ax, padT + 22); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(ax - 5, padT + 10); ctx.lineTo(ax, padT + 2); ctx.lineTo(ax + 5, padT + 10); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = cssVar("--green"); ctx.font = "11px sans-serif";
-      ctx.fillText("+" + fmt(replenishQtyForDraw), ax - 12, padT + 36);
-      if (m.orderDay >= 0) {
-        ctx.fillStyle = cssVar("--muted"); ctx.font = "10.5px sans-serif"; ctx.textAlign = "center";
-        ctx.fillText("← 提前期 " + p.leadTime + " 天 →", (x(m.orderDay) + ax) / 2, padT + 50);
-        ctx.textAlign = "left";
-      }
-    }
+    placeLabels(ctx, pendingLabels, padT + 10, H - 24);
 
-    // 售罄标记（第 3 关起）——位置来自 selloutMoment()，与读数「库存覆盖」共用同一个数
+    // 售罄竖线（售罄关起）：日期标签已并入事件轨，这里只留竖线本体 + 一次性公式讲解
     {
       const moment = selloutMoment(si, m);
       if (els.has("sellout") && moment >= 0 && moment <= progDay) {
@@ -602,11 +711,11 @@
         ctx.strokeStyle = cssVar("--red"); ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.moveTo(sx, padT); ctx.lineTo(sx, padT + plotH); ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = cssVar("--red"); ctx.font = "bold 11px sans-serif";
-        ctx.fillText("售罄 · " + selloutDayLabel(si, m), sx + 4, padT + 12);
         if (si === stageIndexOf("sellout")) {
-          ctx.fillStyle = cssVar("--red"); ctx.font = "10.5px sans-serif";
-          ctx.fillText("= " + fmt(p.inventory) + "÷" + fmt(p.demand), sx + 4, padT + 26);
+          // 贴在竖线顶部（事件轨下方的空白处），不贴曲线终点——那里是缺货带标签的地盘
+          ctx.fillStyle = cssVar("--red"); ctx.font = "10.5px sans-serif"; ctx.textAlign = "left";
+          ctx.fillText("= " + fmt(p.inventory) + "÷" + fmt(p.demand), sx + 5, padT + 12);
+          ctx.textAlign = "left";
         }
       }
     }
@@ -619,6 +728,38 @@
       ctx.fillStyle = cssVar("--purple");
       ctx.beginPath(); ctx.arc(hx, y(inv[progDay]), 4, 0, Math.PI * 2); ctx.fill();
     }
+
+    // —— 事件轨：最后画，永远在最上层，点标签可点击（hitbox 存进 state.eventHitboxes）——
+    const hitboxes = [];
+    if (hasBracket) {
+      const bx0 = x(m.orderDay), bx1 = x(m.arrivalDay);
+      const by = trackTopPad + eventRows.length * trackRowH + trackRowH / 2;
+      ctx.strokeStyle = cssVar("--muted"); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(bx0, by); ctx.lineTo(bx1, by); ctx.stroke();
+      [bx0, bx1].forEach((bx) => { ctx.beginPath(); ctx.moveTo(bx, by - 3); ctx.lineTo(bx, by + 3); ctx.stroke(); });
+      ctx.fillStyle = cssVar("--muted"); ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+      ctx.fillText("提前期 " + p.leadTime + " 天", (bx0 + bx1) / 2, by + 3);
+      ctx.textAlign = "left";
+    }
+    eventRows.forEach((row, ri) => {
+      const cy = trackTopPad + ri * trackRowH + trackRowH / 2;
+      row.forEach((it) => {
+        const active = it.day <= progDay;
+        const col = cssVar(it.color);
+        ctx.globalAlpha = active ? 1 : 0.4;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(it.x0, cy - 8, it.w, 16, 8) : ctx.rect(it.x0, cy - 8, it.w, 16);
+        ctx.globalAlpha = active ? 0.16 : 0.08; ctx.fill();
+        ctx.globalAlpha = active ? 1 : 0.4;
+        ctx.beginPath(); ctx.arc(it.x0 + 9, cy, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = col; ctx.font = "10.5px sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.fillText(it.label, it.x0 + 15, cy + 1);
+        ctx.textBaseline = "alphabetic";
+        ctx.globalAlpha = 1;
+      });
+      row.forEach((it) => hitboxes.push({ x0: it.x0, x1: it.x1, y0: cy - 8, y1: cy + 8, day: it.day }));
+    });
+    state.eventHitboxes = hitboxes;
 
     renderNodeCard(progDay, si, series);
   }
@@ -1021,6 +1162,7 @@
     buildSliders();
     syncSliders();
     state.lastLegendKey = null;
+    freezeStageYAxis();
     setDay(HORIZON);
     updateNavButtons();
   }
@@ -1073,6 +1215,7 @@
     syncSliders();
     renderStageChrome();
     updateNavButtons();
+    freezeStageYAxis();
     setDay(HORIZON);
   }
 
@@ -1162,6 +1305,20 @@
     state.canvas = $("labCanvas");
     if (!state.canvas) return;
     applyStage(0);
+
+    // 事件轨点击跳转：点某个事件标签，播放头直接跳到那一天，侧栏节点卡自动讲那一天
+    state.canvas.addEventListener("click", (e) => {
+      const rect = state.canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+      const hit = state.eventHitboxes.find((h) => cx >= h.x0 && cx <= h.x1 && cy >= h.y0 && cy <= h.y1);
+      if (hit) { pausePlayback(); setDay(hit.day); }
+    });
+    state.canvas.addEventListener("mousemove", (e) => {
+      const rect = state.canvas.getBoundingClientRect();
+      const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+      const hit = state.eventHitboxes.some((h) => cx >= h.x0 && cx <= h.x1 && cy >= h.y0 && cy <= h.y1);
+      state.canvas.style.cursor = hit ? "pointer" : "default";
+    });
 
     $("labPlay").addEventListener("click", autoDemo);
     $("labReset").addEventListener("click", () => {
