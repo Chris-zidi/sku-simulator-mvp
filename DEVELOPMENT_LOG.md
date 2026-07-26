@@ -22,6 +22,38 @@
 
 ## 版本记录
 
+### v0.15.0 - 2026-07-27
+
+状态：修压仓标签越界 + 干掉卡顿 + 用现代浏览器能力根除两类反复复发的 bug。用户三连反馈："UI 还是被挡住了，还出现了乱码""现在是不是用了最新最好的技术栈呢""改完之后也变卡了，有些按钮点了半天都没有反应"。这次先进 Plan Mode 做了完整只读诊断，跟用户确认方向后再动手——用户选的是"保持零构建，升级到现代浏览器能力"，不换 React/Vue。
+
+**诊断结论（先于任何代码改动）**：
+- "乱码"不是编码问题（文件是干净 UTF-8）——是 `🏚 压仓 8 件` 标签叠在 `180 天后` 上面。
+- "变卡"是真的：`cssVar()` 每帧调 20+ 次 `getComputedStyle()`（强制同步重算样式）、`computeSeries()` 每帧算两遍（`draw()` 一遍 `updateReadout()` 一遍）、热路径两处 `innerHTML` 全量重建——「一键模拟」145 帧全跑这套，主线程被占满。
+- 技术栈：React/Vue 不会自动修好这三类问题（都是自己代码的问题），但 ResizeObserver、CSS 容器查询这两个原生能力确实该用而没用。
+
+**改动**：
+
+1. **修压仓/缺货标签越界**（[lab-core.js](D:\Desktop\sku-simulator-mvp\lab-core.js) `clampLabelY()`/`draw()`）：底部安全线从写死的 `H-24` 改成统一算出的 `labelMaxY = H - padB - 6`（比 x 轴日期文字再高 6px 的缓冲）；压仓标签块高 <20px（退化成一条缝）时不再标 `fixed:true`，参与 `placeLabels()` 避让。根因是旧边界离日期文字只差 14px，`endInv` 很小时压仓块贴 0 线，标签被夹到边界正好压字。
+
+2. **渲染管线重构**（[lab-core.js](D:\Desktop\sku-simulator-mvp\lab-core.js)）：
+   - `cssVar()` 加 `Map` 缓存，`init()` 里用 `MutationObserver` 监听 `data-theme` 属性变化时清空缓存——切主题的联动链路用真实浏览器验证过（`draw()` 实际用色跟着新主题变，不是缓存里的旧值）。
+   - 新增 `requestRender()`/`renderNow()` 单一渲染入口：`requestRender()` 用 `state.renderQueued` 标志把同一帧内的多次触发去重到一次 `requestAnimationFrame` 回调；`renderNow()` 里 `computeSeries()` 只算一次，结果分给 `draw()`/`updateReadout()`/`renderNodeCard()` 三个消费者。`setDay()`、`setParam()` 的三个分支（choice/动画 tween/普通赋值）全部从直接调 `draw()+updateReadout()` 改成调 `requestRender()`——`demoStage()` 对两个 `demoTarget` key 各起一条 tween 循环时，同一帧最终只触发一次渲染，不再是每帧 N 份 `innerHTML` 重建。
+   - `renderNodeCard()`/`updateReadout()` 从"每帧整段重建 `innerHTML`"改成"骨架建一次（复用已有的 `state.lastLegendKey` 跳过重建的套路，新增 `state.lastReadoutKey`/`state.readoutCells`/`state.nodeCardEls`），行/结构集合没变时只更新文字"。
+   - `unlockedElements()`/`stageIndexOf()` 按 `stageIndex`/`name` 记忆化，不再每次调用都新建 `Set`/全表扫描（`hasElement()` 到处在调，原来是热路径里隐藏的分配开销）。
+   - 浏览器实测：促销关连续 100 帧 `renderNow()` 的 p95 帧耗时 5.3ms（60fps 预算 16.7ms 内，留了 3 倍多余量）；「一键模拟」2400ms 扫描期间用 `PerformanceObserver` 监听 `longtask` 实测**零长任务**（改前主线程被占满导致"点了半天没反应"）。
+
+3. **ResizeObserver 根除画布尺寸不同步这一整类 bug**（[lab-core.js](D:\Desktop\sku-simulator-mvp\lab-core.js) `init()`）：`new ResizeObserver(() => { resizeCanvas(); requestRender(); }).observe(state.canvas)`——画布 CSS 尺寸一变就自动同步像素缓冲区，不用再满世界找"这个操作会不会改变画布可用空间"的调用点手动补 `resizeCanvas()`（v0.14.4 就是这么一个个补出来的，属于治标）。这次不会重蹈 v0.11 那次 ResizeObserver 翻车的覆辙——那次是"JS 测顶栏高度→写 CSS 变量→改变布局→又触发测量"的反馈环；这里 canvas 的 CSS 尺寸完全由 CSS 决定，`resizeCanvas()` 只改像素缓冲区，不影响任何布局，没有回环。关键路径（`applyStage()`/`restoreSnapshot()`，即切关卡）保留了显式同步调用——按浏览器规范 ResizeObserver 通知在同一帧的 rAF 之后才送达，只靠 observer 会有一帧用旧尺寸画的轻微闪烁，显式调用保证零延迟。诚实说明：ResizeObserver 的实时触发没能在这次用的自动化浏览器面板里直接观测到——面板处于未合成渲染帧的状态（跟 `computer{screenshot}` 一直失败是同一个环境限制），ResizeObserver 的回调恰好挂在渲染管线上，这个环境天然测不到。但用户可见的原始 bug（切关卡后画布变形）已经用不依赖 ResizeObserver 时机的显式同步调用验证修复（连续切关 3 轮 × 7 关，`canvas.width/height` 与 `clientWidth×dpr` 全部一致）。
+
+4. **CSS 容器查询让面板按自身宽度适配**（[index.html](D:\Desktop\sku-simulator-mvp\index.html)）：`.lab-controls`/`.lab-stage`/`.lab-lesson` 都声明成 `container-type: inline-size`，choice 按钮组（`@container ctrls (max-width: 250px)`）、读数面板列数（`@container stage (max-width: 560px/360px)`）改用容器查询触发，取代原来挂在 `@media (max-width: 1100px)` 视口断点上的规则——面板实际宽度是三栏 grid 分配决定的，跟视口宽度从来就不是一回事，这是 v0.13→v0.14.4 反复调三栏比例、每次都要重新试断点的根本解法。顺手确认了一个此前没被注意到的细节：`.lab-demo-badge` 的定位基准其实是 `.lab-canvas-box`（HTML 里有内联 `style="position:relative"`），不是 `.lab-stage`，所以容器查询给 `.lab-stage` 加的 containment 不会像最初担心的那样影响演示徽章的位置——仍然给 `.lab-stage` 补了显式 `position: relative`，把意图钉死，不依赖任何隐式副作用。
+
+5. **测试加固**（`C:\Users\23805\WorkBuddy\2026-07-24-00-53-48\.workbuddy\research\verify_lab.js`）：重叠检测从固定 `Math.abs(A.y-B.y)<13` 改成按每条标签的真实字号（从 `ctx.font` 解析）算包围盒——这正是本轮压仓标签 bug（实际压字 14px）能从旧阈值指缝里漏过去的原因。调这套新算法时又抓到一个边界案例：日销关两条教学标签故意留了 14px 间距、从未真正压过字，第一版的字号系数（0.85 ascent + 0.3 descent）把它误判成重叠——把系数调到更贴近真实无衬线字体墨迹范围的 0.75/0.2 后不再误报，同时仍然抓得住真正的越界。新增退化场景断言（把 `forecast` 调到让 `endInv` 落在 1~20 件，锁定本轮 Part 1 的修复）、性能锁定断言（`renderNow()` 只应触发 1 次 `computeSeries()`、`getComputedStyle` 调用数 <10）、`ResizeObserver` no-op stub（jsdom 没有这个 API，不 stub 的话 `init()` 里那段代码在测试环境完全跑不到）。`verify_lab.js` 从 80 项扩到 **84 项**，全过。
+
+**验证**：
+- `node verify_lab.js`：84 项断言全过（Part 1/5 的新断言在改代码之前跑是失败的，先确认能抓到问题再动手修）。
+- 浏览器实测覆盖 1920×1000（宽屏桌面）、1290×700（复现用户截图的窄高比）、1150×900（三栏断点边缘）、1050×900（刚好堆叠）、375×800（手机）五档尺寸：性能（p95 帧耗时、零长任务）、压仓标签精确复现原始 `endInv=8` 场景确认不再越界、容器查询按自身宽度切换列数（choice 按钮组、读数面板）、demo-badge 定位、主题切换的 cssVar 缓存失效链路，全部通过。
+
+遗留：教学训练 Tab「先学后练」重构仍未开始；`sku-simulator-mvp.html` 废弃单文件版仍未清理；ResizeObserver 的实时触发行为建议下次有真实设备/非自动化浏览器环境时人工复核一次（当前只做了结构性验证：无报错、关键路径不依赖它）。
+
 ### v0.14.4 - 2026-07-27
 
 状态：修画布变形真 bug + 文案栏太窄 + 矮屏幕画布/读数抢地盘。v0.14.3 推送不久，用户反馈"连续几次切换之后，这个文字就会变形呢？然后重新缩放了一下就又不会了"，又发了张预测关截图指出"下面的文字被截断了，UI也要注意一下智能适应啊"。三个问题分开定位、分开修。

@@ -230,17 +230,28 @@
   }
 
   // 每关解锁的视觉元素（累计）
+  // v0.15：STAGES 是常量、结果只由 stageIndex 决定——按下标记忆化。hasElement() 到处在调
+  // （图例 13 条 when、computeSeries 好几处、draw() 每个元素判断都要调），原来每次都新建一个
+  // Set，是热路径里一处不起眼但会累加的分配开销。
+  const unlockedElementsCache = [];
   function unlockedElements(i) {
-    const set = new Set();
-    for (let s = 0; s <= i; s++) if (STAGES[s].element) set.add(STAGES[s].element);
-    return set;
+    if (!unlockedElementsCache[i]) {
+      const set = new Set();
+      for (let s = 0; s <= i; s++) if (STAGES[s].element) set.add(STAGES[s].element);
+      unlockedElementsCache[i] = set;
+    }
+    return unlockedElementsCache[i];
   }
 
   // 是否已经解锁某个元素（累计判断，取代硬编码的 si>=N——上次关卡重排就是因为写死了
   // 序号，这次全部改成按元素名判断，以后再调顺序也不用逐处改数字）
   function hasElement(si, name) { return unlockedElements(si).has(name); }
   // 某个元素是「当前这一关」新引入的（不是"已解锁"，是"正是这一关"），用于只出现一次的教学标注
-  function stageIndexOf(name) { return STAGES.findIndex((s) => s.element === name); }
+  const stageIndexOfCache = new Map();
+  function stageIndexOf(name) {
+    if (!stageIndexOfCache.has(name)) stageIndexOfCache.set(name, STAGES.findIndex((s) => s.element === name));
+    return stageIndexOfCache.get(name);
+  }
 
   // 每关累计的看图词典
   function dictFor(i) {
@@ -266,7 +277,15 @@
     dragParam: null,
     lastLegendKey: null,
     stageYTicks: [0, 3000, 6000, 9000, 12000], // 本关冻结的 y 轴刻度，见 freezeStageYAxis()
-    eventHitboxes: [] // 事件轨每个标签的点击区域（画布 CSS 像素坐标），见 draw() 末尾
+    eventHitboxes: [], // 事件轨每个标签的点击区域（画布 CSS 像素坐标），见 draw() 末尾
+    // v0.15：热路径 DOM 定向更新用的缓存——行/骨架集合不变时只改文字，不整段重建 innerHTML
+    lastReadoutKey: null,
+    readoutCells: [],
+    nodeCardEls: null,
+    renderQueued: false,
+    // 纯计数器，供 verify_lab.js 断言「一次 renderNow() 只算一次 computeSeries()」，
+    // 不参与任何渲染逻辑；通过 getState() 读，不用另外导出 _debug 接口。
+    computeSeriesCallCount: 0
   };
 
   /* ---------- 计算库存序列（clamp 到 0，不再出现负库存）---------- */
@@ -325,6 +344,7 @@
   }
 
   function computeSeries(stageIndex) {
+    state.computeSeriesCallCount++;
     const p = state.current;
     const hasLead = hasElement(stageIndex, "leadTime");
     const hasPromo = hasElement(stageIndex, "promo");
@@ -380,8 +400,17 @@
   }
 
   /* ---------- 画布 ---------- */
+  // v0.15：缓存住——改之前每次 draw() 都要调 20+ 次 getComputedStyle()，每次都强制浏览器
+  // 同步重算样式，促销关一帧下来能摸到 35~40 次，是卡顿的头号根因。CSS 变量值只有切换
+  // 深浅色主题时才会变，缓存 + 主题切换时（见 init() 里的 MutationObserver）清空即可。
+  const cssVarCache = new Map();
   function cssVar(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
+    let v = cssVarCache.get(name);
+    if (v === undefined) {
+      v = getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
+      cssVarCache.set(name, v);
+    }
+    return v;
   }
   // v0.12：贴合数据的「好看」刻度——在 [1,2,2.5,5]×10^n 里找一个分 3~5 档、
   // 且顶部刻度最贴近 dataMax 的组合（老版本 makeTicks 只保证 >=n 档，经常把顶部撑
@@ -431,8 +460,11 @@
   // 或接近 0 线时，贴着它的标签可能冲出画布顶部（撞事件轨）、底部（撞 x 轴日期文字），
   // 或撞进缺货带/压仓块占用的那一小条固定区域（贴着 0 线，与参数无关）。
   // 压力测试发现的真实 bug（极端安全天数/促销系数/日销组合下命中）：统一夹一下。
-  function clampLabelY(yy, padTop, H, zeroY, avoidBottomBand) {
-    let hi = H - 24;
+  // v0.15：底部边界改成调用方传入的 maxY（= H - padB - 6，见 draw() 里的 labelMaxY），
+  // 不再自己用 H-24 现算——旧版硬编码 H-24 离 x 轴日期文字（画在 H-10）只差 14px，
+  // endInv 很小时压仓块退化成一条缝，标签被夹到 H-24 正好压住日期文字。
+  function clampLabelY(yy, padTop, maxY, zeroY, avoidBottomBand) {
+    let hi = maxY;
     if (avoidBottomBand) hi = Math.min(hi, zeroY - 24);
     return clamp(yy, padTop + 10, hi);
   }
@@ -544,7 +576,9 @@
     return rows;
   }
 
-  function draw(dayFraction, stageIndex) {
+  // v0.15：series 参数可选——renderNow() 一帧只算一次 computeSeries() 传进来，
+  // 直接调用 draw()（比如测试里）不传就自己算，行为不变。
+  function draw(dayFraction, stageIndex, series) {
     const c = state.canvas, ctx = state.ctx;
     if (!c || !ctx) return;
     const W = state.cssW, H = state.cssH;
@@ -552,7 +586,7 @@
     const si = stageIndex == null ? state.stageIndex : stageIndex;
     const AXIS_STAGE = stageIndexOf("axis");
     const els = unlockedElements(si);
-    const series = computeSeries(si);
+    series = series || computeSeries(si);
     const inv = series.inv;
     const m = series.metrics;
     const p = state.current;
@@ -560,6 +594,9 @@
     const hasBottomBand = els.has("sellout") && m.stockoutDays > 0;
 
     const padL = 60, padR = 16, padB = 30;
+    // v0.15：图内标注的统一底部安全线——比 x 轴日期文字（画在 H-10）再高 6px 的缓冲，
+    // 取代旧版写死的 H-24（离 H-10 只差 14px，emoji 实际渲染高度一超就压上日期文字）。
+    const labelMaxY = H - padB - 6;
     const plotW = W - padL - padR;
     const xMax = HORIZON;
     const x = (d) => padL + (clamp(d, 0, xMax) / xMax) * plotW;
@@ -618,7 +655,8 @@
       ctx.fillText("下面会教：让它一天天掉、撞到 0、撞到之前补货回来……", W / 2, padT + 42);
       ctx.textAlign = "left";
       state.eventHitboxes = [];
-      renderNodeCard(0, si, series);
+      // renderNodeCard() 挪到 renderNow() 里统一调用（v0.15）——draw() 只负责画布，
+      // 不该顺带写侧栏 DOM；坐标系关的 progDay 固定是 0，renderNow() 里特判处理。
       return;
     }
 
@@ -678,7 +716,10 @@
       ctx.fillRect(bx, by, boxW, zeroY - by);
       ctx.strokeStyle = "rgba(110,130,160,0.9)"; ctx.lineWidth = 1;
       ctx.strokeRect(bx, by, boxW, zeroY - by);
-      pendingLabels.push({ text: "🏚 压仓 " + fmt(m.endInv) + " 件", x: x(HORIZON) - boxW - 6, y: clampLabelY(by + 12, padT, H, zeroY, false), align: "right", font: "bold 11px sans-serif", color: "--ink", fixed: true });
+      // endInv 很小时压仓块退化成一条贴着 0 线的缝，by≈zeroY，锚点 by+12 已经没有意义——
+      // 这时候不再标 fixed（永不避让），让它跟其他浮动标签一起走 placeLabels() 的避让逻辑。
+      const overstockBlockH = zeroY - by;
+      pendingLabels.push({ text: "🏚 压仓 " + fmt(m.endInv) + " 件", x: x(HORIZON) - boxW - 6, y: clampLabelY(by + 12, padT, labelMaxY, zeroY, false), align: "right", font: "bold 11px sans-serif", color: "--ink", fixed: overstockBlockH >= 20 });
     }
 
     // 斜线中点 + 终点 教学标签（日销关，让"日销 = 斜率"一眼可见，只在这一关出现一次）
@@ -712,7 +753,7 @@
         const gap = Math.abs(series.invF[d] - inv[d]);
         if (gap > bestGap) { bestGap = gap; labelDay = d; }
       }
-      pendingLabels.push({ text: "你的预测（计划）", x: x(labelDay) + 6, y: clampLabelY(y(series.invF[labelDay]) - 8, padT, H, zeroY, hasBottomBand), align: "left", font: "11px sans-serif", color: "--purple" });
+      pendingLabels.push({ text: "你的预测（计划）", x: x(labelDay) + 6, y: clampLabelY(y(series.invF[labelDay]) - 8, padT, labelMaxY, zeroY, hasBottomBand), align: "left", font: "11px sans-serif", color: "--purple" });
     }
 
     // 促销：竖虚线（哪天开始）已并入事件轨统一画，这里只留贴着拐点的斜率标签 + 节点圆点
@@ -720,7 +761,7 @@
       const px = x(p.promoDay);
       drawNodeDot(ctx, px, y(inv[Math.min(p.promoDay, progDay)]), cssVar("--amber"));
       if (progDay > p.promoDay + 5) {
-        pendingLabels.push({ text: "斜率 × " + p.promo + " = 每天少 " + fmt(p.demand * p.promo) + " 件", x: px + 8, y: clampLabelY(y(inv[Math.min(p.promoDay, progDay)]) + 16, padT, H, zeroY, hasBottomBand), align: "left", font: "bold 11px sans-serif", color: "--amber" });
+        pendingLabels.push({ text: "斜率 × " + p.promo + " = 每天少 " + fmt(p.demand * p.promo) + " 件", x: px + 8, y: clampLabelY(y(inv[Math.min(p.promoDay, progDay)]) + 16, padT, labelMaxY, zeroY, hasBottomBand), align: "left", font: "bold 11px sans-serif", color: "--amber" });
       }
     }
 
@@ -731,13 +772,13 @@
       ctx.strokeStyle = cssVar("--amber"); ctx.setLineDash([3, 4]); ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(rx, padT); ctx.lineTo(rx, padT + plotH); ctx.stroke();
       ctx.setLineDash([]);
-      pendingLabels.push({ text: "📍 参考建议 第" + (m.refOrderDay + 1) + "天", x: rx + 5, y: clampLabelY(padT + 14, padT, H, zeroY, hasBottomBand), align: "left", font: "11px sans-serif", color: "--amber" });
+      pendingLabels.push({ text: "📍 参考建议 第" + (m.refOrderDay + 1) + "天", x: rx + 5, y: clampLabelY(padT + 14, padT, labelMaxY, zeroY, hasBottomBand), align: "left", font: "11px sans-serif", color: "--amber" });
     }
     if (els.has("leadTime") && m.orderDay >= 0 && m.orderDay <= progDay) {
       drawNodeDot(ctx, x(m.orderDay), y(inv[m.orderDay]), cssVar("--amber"));
     }
 
-    placeLabels(ctx, pendingLabels, padT + 10, H - 24);
+    placeLabels(ctx, pendingLabels, padT + 10, labelMaxY);
 
     // 售罄竖线（售罄关起）：日期标签已并入事件轨，这里只留竖线本体 + 一次性公式讲解
     {
@@ -796,8 +837,6 @@
       row.forEach((it) => hitboxes.push({ x0: it.x0, x1: it.x1, y0: cy - 8, y1: cy + 8, day: it.day }));
     });
     state.eventHitboxes = hitboxes;
-
-    renderNodeCard(progDay, si, series);
   }
 
   /* ---------- 📍 现在图上发生了什么（侧栏节点卡，跟着播放头/参数走） ---------- */
@@ -865,22 +904,35 @@
     return cur;
   }
 
+  // v0.15：节点卡的形状（标题+4 行）任何关卡下都一样，只有文字内容变——骨架只搭一次，
+  // 之后每帧只改 textContent，不用每帧重新解析一遍 innerHTML（这是热路径，播放/演示时每帧都调）。
   function renderNodeCard(progDay, si, series) {
     const el = $("labNodeCard");
     if (!el) return;
+    if (!state.nodeCardEls) {
+      el.innerHTML = `<span class="lab-nodecard-title" id="ncTitle"></span>` +
+        `<b id="ncHeadline"></b><br><span id="ncWhat"></span><br>🤔 <span id="ncWhy"></span><br>👉 <span id="ncAction"></span>`;
+      state.nodeCardEls = { title: $("ncTitle"), headline: $("ncHeadline"), what: $("ncWhat"), why: $("ncWhy"), action: $("ncAction") };
+    }
     const events = computeEvents(si, series);
     const ev = currentEvent(events, progDay);
-    el.innerHTML =
-      `<span class="lab-nodecard-title">📍 现在图上发生了什么 · 第 ${progDay} 天</span>` +
-      `<b>${ev.headline}</b><br>${ev.what}<br>🤔 ${ev.why}<br>👉 ${ev.action}`;
+    const els2 = state.nodeCardEls;
+    els2.title.textContent = "📍 现在图上发生了什么 · 第 " + progDay + " 天";
+    els2.headline.textContent = ev.headline;
+    els2.what.textContent = ev.what;
+    els2.why.textContent = ev.why;
+    els2.action.textContent = ev.action;
   }
 
   /* ---------- 读数面板（按关显示相关指标）---------- */
-  function updateReadout() {
+  // v0.15：series 参数可选（同 draw()）。行的「有哪几行」只由 hasElement() 决定，只在切关卡时变；
+  // 复用 renderLegend() 已经在用的 lastKey 跳过重建套路——行集合没变就只更新每个 .ro-v 的文字，
+  // 不用每帧把整个 ro-grid 拆了重搭一遍（这是热路径，播放/演示时每帧都调）。
+  function updateReadout(series) {
     const el = $("labReadout");
     if (!el) return;
     const si = state.stageIndex;
-    const series = computeSeries(si);
+    series = series || computeSeries(si);
     const m = series.metrics;
     const badge = (txt, cls) => `<span class="ro-badge ${cls}">${txt}</span>`;
     const rows = [];
@@ -909,8 +961,14 @@
       rows.push(["压仓占用", m.overstockMoney > 0 ? badge("¥" + fmt(m.overstockMoney), "bad") : "¥0"]);
     }
     if (hasElement(si, "promo")) rows.push(["促销期日销", fmt(state.current.demand * state.current.promo) + " 件/天"]);
-    el.innerHTML = `<div class="ro-grid">` + rows.map(([k, v]) =>
-      `<div class="ro-cell"><span class="ro-k">${k}</span><span class="ro-v">${v}</span></div>`).join("") + `</div>`;
+    const rowKey = rows.map(([k]) => k).join("|");
+    if (rowKey !== state.lastReadoutKey) {
+      state.lastReadoutKey = rowKey;
+      el.innerHTML = `<div class="ro-grid">` + rows.map(([k]) =>
+        `<div class="ro-cell"><span class="ro-k">${k}</span><span class="ro-v"></span></div>`).join("") + `</div>`;
+      state.readoutCells = [...el.querySelectorAll(".ro-v")];
+    }
+    rows.forEach(([, v], i) => { if (state.readoutCells[i]) state.readoutCells[i].innerHTML = v; });
     renderLegend(series);
   }
 
@@ -1003,19 +1061,22 @@
       input.querySelectorAll(".lab-choice-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.value) === value));
       const lbl = $("labVal_" + name);
       if (lbl) lbl.textContent = fmt(value) + " " + def.unit;
-      draw(state.currentDay / HORIZON); updateReadout();
+      requestRender();
       return;
     }
     value = clamp(value, def.min, def.max);
     if (animate) {
       const from = Number(input.value), to = value, dur = 600, t0 = performance.now();
+      // v0.15：这个 step() 自己的 RAF 循环只管把数值往前推 60 分之一步——真正的画布/DOM 更新
+      // 交给 requestRender() 去重合并，即便 demoStage() 同时对两个参数各起一条 tween，
+      // 同一帧最终也只会触发一次 renderNow()，不会变成每帧 N 份 innerHTML 重建。
       function step(now) {
         let k = (now - t0) / dur; if (k > 1) k = 1;
         const v = from + (to - from) * k;
         input.value = v; state.current[name] = Number(v);
         const lbl = $("labVal_" + name);
         if (lbl) lbl.textContent = fmt(Number(v)) + " " + def.unit;
-        draw(state.currentDay / HORIZON); updateReadout();
+        requestRender();
         if (k < 1) requestAnimationFrame(step);
       }
       requestAnimationFrame(step);
@@ -1023,7 +1084,7 @@
       input.value = value; state.current[name] = value;
       const lbl = $("labVal_" + name);
       if (lbl) lbl.textContent = fmt(value) + " " + def.unit;
-      draw(state.currentDay / HORIZON); updateReadout();
+      requestRender();
     }
   }
 
@@ -1173,6 +1234,27 @@
       }).join("");
   }
 
+  /* ---------- 渲染调度：一帧只算一次、只画一次（v0.15） ----------
+   * 改之前 setDay()/setParam() 各自直接调 draw()+updateReadout()，两处都各自 computeSeries()
+   * 一遍——播放/演示动画每帧都会经过好几条这样的路径（scrub 事件、tween 的 RAF 循环……），
+   * 同一帧里被调用好几次，等于同一天的模拟结果算了好几遍、DOM 也重复写了好几遍。
+   * requestRender() 把「这一帧需要重画」这件事去重到一次 RAF 回调里，renderNow() 里
+   * computeSeries() 只算一次，结果分给 draw()/updateReadout()/renderNodeCard() 三个消费者。 */
+  function requestRender() {
+    if (state.renderQueued) return;
+    state.renderQueued = true;
+    requestAnimationFrame(() => { state.renderQueued = false; renderNow(); });
+  }
+  function renderNow() {
+    const si = state.stageIndex;
+    const series = computeSeries(si);
+    draw(state.currentDay / HORIZON, si, series);
+    updateReadout(series);
+    // 坐标系关没有播放头概念（draw() 里会提前 return），节点卡固定讲第 0 天。
+    const progDayForCard = si === stageIndexOf("axis") ? 0 : state.currentDay;
+    renderNodeCard(progDayForCard, si, series);
+  }
+
   /* ---------- 播放头 / 播放控制条 ---------- */
   function setDay(day) {
     day = clamp(Math.round(day), 0, HORIZON);
@@ -1181,8 +1263,7 @@
     if (scrub) scrub.value = day;
     const lbl = $("labDayLabel");
     if (lbl) lbl.textContent = day === 0 ? "今天" : "第 " + day + " 天";
-    draw(day / HORIZON);
-    updateReadout();
+    requestRender();
   }
 
   function updatePlayPauseIcon() {
@@ -1310,9 +1391,10 @@
     freezeStageYAxis();
     // 先把读数面板刷新到位——它的行数随关卡变化（比如"参考建议日"这一行只在安全关起才出现），
     // 而它是画布的 flex 兄弟节点，行数一变，画布能分到的高度也跟着变。resizeCanvas() 必须在
-    // chips（renderStageChrome 已处理）和读数行数都落定之后再量，否则量到的是过渡态的尺寸——
-    // canvas.width/height（像素缓冲区）跟 clientWidth/Height（最终 CSS 尺寸）对不上，浏览器会把
-    // 旧像素内容拉伸/压扁塞进新框，文字看起来"变形"，只有下次 window resize 才会再校准一次。
+    // chips（renderStageChrome 已处理）和读数行数都落定之后再量，否则量到的是过渡态的尺寸。
+    // v0.15：init() 里的 ResizeObserver 会兜住"以后新增的、没显式处理的"布局变化路径，但切
+    // 关卡这个已知的关键路径仍然显式调用——按规范 ResizeObserver 通知在同一帧的 rAF 之后才
+    // 送达，只靠 observer 会有一帧用旧尺寸画的轻微闪烁，这里显式调用保证零延迟、立刻画对。
     // updateReadout() 这里多调一次是幂等的（下面 setDay() 内部还会再调一次），不会有副作用。
     updateReadout();
     resizeCanvas();
@@ -1369,13 +1451,15 @@
 
   /* ---------- 公开接口 ---------- */
   window.LabCore = {
-    onShow() { resizeCanvas(); draw(state.currentDay / HORIZON); updateReadout(); },
+    // 切 Tab 变可见这一刻要立即看到画面，不走 requestRender() 的一帧延迟——renderNow() 同步执行。
+    onShow() { resizeCanvas(); renderNow(); },
     // 仅供 verify_lab.js 等自动化测试使用：暴露内部状态/纯函数，不给 UI 用
     _debug: {
       computeSeries, STAGES, PARAMS, HORIZON,
       getState: () => state,
       applyStage,
       undo, redo,
+      renderNow,
       historyLength: () => state.history.length,
       redoLength: () => state.redoStack.length
     }
@@ -1384,6 +1468,31 @@
   function init() {
     state.canvas = $("labCanvas");
     if (!state.canvas) return;
+
+    // cssVar() 缓存只有切换深浅色主题时才需要失效——主题按钮在 index.html 里是靠
+    // root.setAttribute('data-theme','dark'/移除) 切的（不耦合那个按钮，监听属性本身即可）。
+    if (typeof MutationObserver !== "undefined") {
+      new MutationObserver(() => { cssVarCache.clear(); state.lastLegendKey = null; requestRender(); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    }
+
+    // v0.15：画布 CSS 尺寸一变就自动同步像素缓冲区并重绘，不用再满世界找"这个操作会不会
+    // 改变画布可用空间"的调用点手动补 resizeCanvas()（v0.14.4 就是这么一个个补出来的）。
+    //
+    // 这次为什么安全（v0.11 那次 ResizeObserver 翻过车，教训还留在 index.html 顶部注释里）：
+    // 那次是"JS 测顶栏高度 → 写 CSS 变量 → 改变布局 → 又触发测量"的反馈环，会卡在中间态。
+    // 这里 canvas 的 CSS 尺寸完全由 CSS（width:100%;height:100%）决定，resizeCanvas() 只改
+    // canvas.width/height 这两个像素缓冲区属性——不影响任何布局，没有回环。
+    //
+    // 注意：不能靠它完全取代 applyStage()/restoreSnapshot() 里的显式调用——按浏览器规范，
+    // 一帧内 rAF 回调先跑、ResizeObserver 通知后跑，若只靠 observer，切关卡后的第一帧会先用
+    // 旧尺寸画一次、下一帧才校正，肉眼有极轻微的闪烁。两边保留：关键路径（切关卡）显式调用
+    // 保证零延迟，observer 兜住所有没显式覆盖到的路径（比如以后新增的、会改变画布可用空间的
+    // DOM 变更）。jsdom 没有 ResizeObserver，测试路径不受影响。
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(() => { resizeCanvas(); requestRender(); }).observe(state.canvas);
+    }
+
     applyStage(0);
 
     // 事件轨点击跳转：点某个事件标签，播放头直接跳到那一天，侧栏节点卡自动讲那一天
@@ -1435,7 +1544,9 @@
     });
 
     window.addEventListener("resize", () => {
-      if ($("labView") && !$("labView").hidden) { resizeCanvas(); draw(state.currentDay / HORIZON); }
+      // Part 3 的 ResizeObserver 也会因为窗口缩放改变画布 CSS 尺寸而触发，这里手动调
+      // resizeCanvas() 是双保险（ResizeObserver 在极少数浏览器/时序下可能不立即触发）。
+      if ($("labView") && !$("labView").hidden) { resizeCanvas(); requestRender(); }
     });
   }
 
