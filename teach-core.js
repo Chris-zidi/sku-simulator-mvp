@@ -464,12 +464,16 @@
     const sand = $("sandboxView");
     const lab = $("labView");
     const tb = $("tabTeach"), sb = $("tabSandbox"), lb = $("tabLab");
+    const app = document.querySelector(".app");
     if (teach) teach.hidden = true;
     if (sand) sand.hidden = true;
     if (lab) lab.hidden = true;
     if (tb) tb.classList.remove("on");
     if (sb) sb.classList.remove("on");
     if (lb) lb.classList.remove("on");
+    // 只有动画实验室需要把 .app 锁成 100vh 的 flex 列（舞台钉死视口不滚动）；
+    // 教学训练/自由沙盘是普通长页面，必须能整页滚动，不能带着这个类。
+    if (app) app.classList.toggle("lab-mode", which === "lab");
     if (which === "lab") {
       if (lab) lab.hidden = false;
       if (lb) lb.classList.add("on");
@@ -507,9 +511,16 @@
    * ============================================================ */
   function injectCSS() {
     const css = `
-    .tabbar{display:flex;gap:8px;padding:10px 16px 0;max-width:1100px;margin:0 auto;}
-    .tabbar button{font:inherit;font-size:15px;padding:10px 18px;border-radius:12px 12px 0 0;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;opacity:.7;}
-    .tabbar button.on{opacity:1;font-weight:700;border-bottom-color:transparent;background:var(--paper);}
+    .tabbar{display:flex;gap:6px;padding:0;margin:0;order:2;flex:1;justify-content:center;min-width:0;}
+    .tabbar button{font:inherit;font-size:13px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;opacity:.7;white-space:nowrap;}
+    .tabbar button.on{opacity:1;font-weight:700;background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+    .brand{order:1}
+    .header-actions{order:3}
+    @media (max-width:900px){
+      .header-inner{flex-wrap:wrap;}
+      .tabbar{order:3;flex:1 1 100%;justify-content:flex-start;overflow-x:auto;padding-top:6px;}
+      .header-actions{order:2;}
+    }
     #teachView{max-width:1100px;margin:0 auto;padding:8px 16px 60px;}
     #sandboxView[hidden]{display:none;}
     .teach-hero{background:linear-gradient(135deg,var(--accent-soft),var(--paper));border:1px solid var(--line);border-radius:18px;padding:26px;margin:14px 0;}
@@ -605,12 +616,13 @@
 
   function init() {
     injectCSS();
-    // 顶部 Tab
+    // 顶部 Tab：并入顶栏同一行（原来是品牌行下面单独一行，占掉一整行高度）
     const header = document.querySelector("header .header-inner");
+    const actions = header.querySelector(".header-actions");
     const bar = document.createElement("nav");
     bar.className = "tabbar";
     bar.innerHTML = `<button id="tabTeach" class="on">📚 教学训练</button><button id="tabSandbox">🧪 自由沙盘</button><button id="tabLab">🎬 动画实验室</button>`;
-    header.parentNode.insertBefore(bar, header.nextSibling);
+    if (actions) header.insertBefore(bar, actions); else header.appendChild(bar);
     $("tabTeach").addEventListener("click", () => switchTab("teach"));
     $("tabSandbox").addEventListener("click", () => switchTab("sandbox"));
     $("tabLab").addEventListener("click", () => switchTab("lab"));

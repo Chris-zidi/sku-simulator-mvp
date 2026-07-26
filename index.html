@@ -944,9 +944,14 @@
       .v5-panels > .section:nth-child(4) { grid-column: 1 / -1; }
     }
 
-    /* ===== 动画实验室（v0.10：舞台钉死视口，右侧独立滚动） ===== */
-    :root { --header-h: 118px; }
-    #labView { max-width: 1440px; margin: 0 auto; padding: 0 16px; height: calc(100vh - var(--header-h)); overflow: hidden; }
+    /* ===== 动画实验室（v0.10：舞台钉死视口，右侧独立滚动） =====
+     * v0.11：改用纯 flex 布局撑满高度，不再用 JS 测量顶栏高度写 CSS 变量——
+     * 旧版 ResizeObserver 在顶栏换行的中间态测到过一次偏高的值后就不再触发，
+     * 导致 --header-h 长期停留在错误值（讲解区被压缩到只剩 20px 高）。
+     * .app.lab-mode 让整个 .app 变成 100vh 的 flex 列，header 与 #labView 各占其份，高度由浏览器自己算，没有测量、没有时序问题。 */
+    .app.lab-mode { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .app.lab-mode header { flex: none; position: static; }
+    #labView { max-width: 1440px; margin: 0 auto; padding: 0 16px; flex: 1; min-height: 0; width: 100%; box-sizing: border-box; overflow: hidden; }
     #labView[hidden] { display: none; }
     .lab-wrap { height: 100%; }
     .lab-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; height: 100%; padding: 10px 0; }
@@ -973,23 +978,23 @@
     .lab-actions .ghost-btn { flex: 1; min-width: 0; }
     /* --- 右：侧栏（顶部固定操作区 + 下方独立滚动讲解区） --- */
     .lab-side { height: 100%; display: flex; flex-direction: column; min-height: 0; }
-    .lab-side-fixed { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; flex-shrink: 0; margin-bottom: 10px; }
-    .lab-side-fixed h2 { font-size: 16px; margin: 2px 0 10px; line-height: 1.4; }
-    .lab-elements { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+    .lab-side-fixed { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; flex-shrink: 0; margin-bottom: 8px; }
+    .lab-side-fixed h2 { font-size: 15px; margin: 0 0 6px; line-height: 1.35; }
+    .lab-elements { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
     .lab-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); white-space: nowrap; transition: all .2s; }
     .lab-chip.done { color: var(--ink-soft); border-color: var(--green); opacity: .92; }
     .lab-chip.current { color: #fff; background: var(--accent); border-color: var(--accent); font-weight: 700; box-shadow: 0 0 0 3px var(--accent-soft); }
     .lab-chip.locked { color: var(--muted); opacity: .5; cursor: help; }
-    .lab-nodecard { font-size: 12.5px; line-height: 1.65; color: var(--ink); background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .lab-nodecard { font-size: 12px; line-height: 1.55; color: var(--ink); background: var(--accent-soft); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
     .lab-nodecard b { color: var(--ink); }
-    .lab-nodecard .lab-nodecard-title { display: block; font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-    .lab-params { display: grid; gap: 10px; margin-top: 2px; }
-    .lab-field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; transition: box-shadow .25s, border-color .25s; }
+    .lab-nodecard .lab-nodecard-title { display: block; font-size: 10.5px; font-weight: 700; color: var(--accent); margin-bottom: 3px; }
+    .lab-params { display: grid; gap: 6px; margin-top: 2px; }
+    .lab-field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; transition: box-shadow .25s, border-color .25s; }
     .lab-field.glow { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-    .lab-field-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-    .lab-field-top label { font-size: 13px; font-weight: 600; }
-    .lab-val { font-size: 13px; font-weight: 700; color: var(--accent); }
-    .lab-note { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .lab-field-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+    .lab-field-top label { font-size: 13px; font-weight: 600; display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; }
+    .lab-val { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+    .lab-note-inline { font-size: 10.5px; font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .lab-field input[type=range] { width: 100%; accent-color: var(--accent); }
     .lab-nav { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .lab-nav button { font-size: 13px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
@@ -2101,8 +2106,8 @@
   });
 })();
 </script>
-<script src="teach-data.js"></script>
-<script src="teach-core.js"></script>
-<script src="lab-core.js"></script>
+<script src="teach-data.js?v=20260726g"></script>
+<script src="teach-core.js?v=20260726g"></script>
+<script src="lab-core.js?v=20260726g"></script>
 </body>
 </html>

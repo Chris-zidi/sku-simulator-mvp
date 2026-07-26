@@ -1,17 +1,24 @@
 /* ============================================================
- * lab-core.js — 动画实验室 v0.10（坐标轴锁定 + 节点解析 + 撤销/重做 + 播放控制）
+ * lab-core.js — 动画实验室 v0.11（预测因果链打通 + 关卡重排）
  * 设计：7 关逐步「长出」图；每关引入 1-2 个新视觉元素 + 解释它的几何含义。
  * 依赖：index.html 中的 #labView / #labCanvas / 引导侧栏节点
  * 主题：复用全局 CSS 变量（--green/--red/--amber/--purple/--ink/--muted/--line）
  *
- * v0.10 关键修复（见 AI 交接文档 / 计划）：
- * - 坐标轴：横轴恒定 180 天、纵轴恒定按库存+补货推算，不再跟着「日销」这个被拖动的参数联动缩放
- *   （旧版横轴按覆盖天数动态收窄 + 纵轴被负库存尾巴撑开，两层缩放叠加抵消了斜率变化，日销越大线反而越平）
- * - 库存不再画成负数：clamp 到 0，缺货改成 0 线上方的红色「缺货带」+ 少卖件数标注
- * - 舞台钉死视口（配合 index.html 的 CSS 重构），右侧栏独立滚动
- * - 未解锁关卡只显示 🔒，不剧透名称
- * - 撤销/重做（Ctrl+Z / Ctrl+Shift+Z）+ 上一步 + 播放暂停/继续/逐天步进
- * - 一键模拟结束后恢复「用户自己调过的值」，不再覆盖成 baseline
+ * v0.11 关键修复（见计划 http-200-v0-9-3-ancient-volcano.md）：
+ * - 修「预测」空转 bug：旧版下单时机判断用的是真实日销 demand，forecast 滑块从头到尾不影响
+ *   任何结果——现实里 Forecast 的全部意义恰恰是「你不知道真实需求，只能凭预测做决策」。
+ *   现在决策侧（何时下单/下多少）用 forecast 算，结果侧（真实消耗）永远用 demand 算，
+ *   预测错了会真实体现在缺货/压仓上。
+ * - 关卡重排：补货、安全库存提到 Forecast 之前——前 5 关先假设「你预测得准」，
+ *   Forecast 作为最后的「大 boss」关卡才把这个假设拿掉。
+ * - 关卡序号判断改用元素名（hasElement/stageIndexOf），不再写死 si>=N——上次重排就因为
+ *   硬编码序号到处踩坑，这次改法能扛住以后再调整顺序。
+ * - 新增少赚金额/压仓占用金额（单件毛利口径来自 Govee 利润表真实数据）。
+ *
+ * v0.10 修复（仍然有效）：
+ * - 坐标轴：横轴恒定 180 天、纵轴恒定按库存+补货推算，不再跟着日销联动缩放
+ * - 库存不再画成负数：clamp 到 0，缺货改成 0 线上方的红色「缺货带」
+ * - 舞台钉死视口、未解锁关卡只显示 🔒、撤销/重做/播放控制、一键模拟恢复用户自己的值
  * ============================================================ */
 (function () {
   "use strict";
@@ -20,6 +27,14 @@
   const fmt = (n) => Math.round(n).toLocaleString("en-US");
 
   const HORIZON = 180;
+  // 单件毛利/成本口径：来自 Govee 利润表.xlsx 真实数据（EU 原价 €79.99，采购+头程+尾程成本
+  // 约 31，净利润率落在 12%~25% 区间），与项目沙盘部分（index.html）的 BASE_PRICE/UNIT_COST
+  // 保持同一口径。这里独立定义一份同值常量，不跨 <script> 依赖全局（lab-core.js 是独立 IIFE，
+  // verify_lab.js 的 jsdom 环境也不加载 index.html 的内联 script）。
+  const UNIT_PRICE = 79;
+  const UNIT_COST = 31;
+  const UNIT_MARGIN = UNIT_PRICE - UNIT_COST; // 48：卖一件的毛利
+
 
   // —— 所有可拖动因子（数值范围/说明）——
   const PARAMS = {
@@ -97,25 +112,6 @@
       ]
     },
     {
-      logic: "预测",
-      title: "预测线：你的「计划」vs 真实",
-      element: "forecast",
-      newParam: ["forecast"],
-      newLabel: "🟣 预测线",
-      intro:
-        "你开工前会先「预测」每天能卖多少——这就是<b>计划</b>。<br>" +
-        "<b>为啥用虚线？</b>虚线 = 还没发生 = 计划。绿实线 = 真实。<br>" +
-        "如果预测 < 真实：你以为还够，其实已经偷偷断货；两条线分得越开，决策错得越远。",
-      instruct: "拖【预测日均销量】从 32 拉到和真实 48 一样：╌ 紫虚线越来越贴近 📉 绿实线，两线重合 = 计划对得上现实。",
-      observe: "观察 ╌ 紫虚线（计划）和 📉 绿实线（真实）之间的张口：口越大 = 预测错得越远。紫线更平缓 = 你低估了销量 → 会突然断货。",
-      baseline: { inventory: 4800, demand: 48, forecast: 32, leadTime: 140, replenish: 0, safetyDays: 0, promo: 1, promoDay: 60 },
-      demoTarget: { forecast: 48 },
-      dict: [
-        { k: "🟣 紫虚线", v: "「计划」曲线 = 按你预测的日销算出的库存走势。虚线代表还没发生。" },
-        { k: "📊 双线差", v: "紫线低过绿线 = 计划低估了真实需求 → 决策会断货。" }
-      ]
-    },
-    {
       logic: "补货",
       title: "补货提前期：箭头为啥在那一时刻？",
       element: "leadTime",
@@ -124,7 +120,8 @@
       intro:
         "现实里：库存快没了要补货，但货从下单到上架要等很久（<b>提前期</b>）。<br>" +
         "<b>绿色箭头 = 到货日</b>。箭头下方数字 = 一次补进来几件。<br>" +
-        "如果<b>到货日 > 售罄日</b>，中间就是<b>红色缺货带</b>——你明明卖得动却没货可卖（少赚 + 评分降）。",
+        "如果<b>到货日 > 售罄日</b>，中间就是<b>红色缺货带</b>——你明明卖得动却没货可卖（少赚 + 评分降）。<br>" +
+        "<b>先声明一件事</b>：这一关和下一关，我们先假设你对销量的判断和真实完全一致（预测=真实）——把「什么时候该下单」这件事先学会，最后一关才会把这个假设拿掉。",
       instruct: "拖【补货提前期】从 140 拉到 160：🔻 绿箭头右移，🟥 红色缺货带变大；再拖【补货量】看补多少能把绿线抬回 0 之上。",
       observe: "观察 🔻 绿箭头（到货日）和 ▏红竖虚线（售罄日）的前后关系：箭头在红线右边 = 到货太晚 = 中间全是 🟥 缺货带。",
       baseline: { inventory: 3000, demand: 48, forecast: 48, leadTime: 140, replenish: 4000, safetyDays: 0, promo: 1, promoDay: 60 },
@@ -154,6 +151,30 @@
       ]
     },
     {
+      logic: "预测",
+      title: "Forecast 大 boss：前面几关的「预测=真实」是假的",
+      element: "forecast",
+      newParam: ["forecast"],
+      newLabel: "🟣 预测线",
+      supersedes: ["replenish"], // 从这关起，补货量不再手动拖，改成按预测自动算——见 instruct
+      intro:
+        "揭晓一件事：前面几关「下单时机」「下单量」的判断，都是<b>用真实日销算的</b>——等于你有上帝视角，事先就知道明天能卖多少。<br>" +
+        "<b>现实里你没有这个视角，你只有「预测」</b>。这一关开始，「什么时候下单、下多少」全部改成<b>按你的预测算</b>，真实销量只负责决定库存实际怎么消耗——预测和真实终于要分开了。<br>" +
+        "<b>预测偏低</b>：你以为还能撑很久，其实早就该下单了——下单晚、下单少 → 🟥 缺货带变大 → <b>少赚钱</b>。<br>" +
+        "<b>预测偏高</b>：你以为很快要断货，赶紧多下单——货到了却卖不完，压在仓库里 → <b>占用资金</b>。<br>" +
+        "<small>（这一关把【补货提前期】先调回 30 天——140 天太长，180 天的时间轴里连一整个「下单→到货→卖完」的周期都放不下，看不出预测误差的效果；想看长提前期的压力，可以再拖回 140。）</small>",
+      instruct: "拖【预测日均销量】：往下拖到 20（比真实 48 低很多）看缺货带怎么变大、少赚多少钱；再拖到 90（比真实高很多）看期末剩下一堆货、占用多少资金。拖回 48（等于真实）两种代价都会趋近于 0。",
+      observe: "观察读数「少赚金额」「压仓占用」：这两个数不是装饰——预测的每一分误差，最后都变成了真金白银的损失。补货量这一关起不再手动拖，系统按你的预测自动算「该补多少」，算错了 lostSales/期末库存会立刻告诉你。",
+      baseline: { inventory: 5000, demand: 48, forecast: 48, leadTime: 30, replenish: 4000, safetyDays: 14, promo: 1, promoDay: 60 },
+      demoTarget: { forecast: 20 },
+      dict: [
+        { k: "🟣 紫虚线", v: "「计划」曲线 = 按你预测的日销算出的库存走势。虚线代表还没发生。" },
+        { k: "🧭 决策 vs 结果", v: "下单时机、下单量 = 按预测算（决策）；库存实际消耗 = 按真实销量算（结果）。两者第一次分开。" },
+        { k: "💰 少赚", v: "预测偏低 → 下单太晚太少 → 断货变大 → 少赚的钱 = 少卖件数 × 单件毛利。" },
+        { k: "🏚 压仓", v: "预测偏高 → 下单太早太多 → 期末剩货 → 占用资金 = 剩余件数 × 采购成本。" }
+      ]
+    },
+    {
       logic: "促销",
       title: "促销尖峰：线为啥突然变陡？",
       element: "promo",
@@ -163,7 +184,7 @@
         "大促期间销量会临时放大 N 倍（<b>促销系数</b>，1 表示不促销，2.5 表示日销 × 2.5）。<br>" +
         "<b>线为啥突然变陡？</b>斜率 = -日销，促销期日销变大 → 斜率绝对值变大 → 线更陡 = <b>尖峰</b>。<br>" +
         "<b>为啥用一条竖虚线标「促销开始」？</b>让你一眼看到「从这里开始斜率变了」。<br>" +
-        "光加广告不补货 = 尖峰压垮库存，库存骤降到 0。",
+        "光加广告不补货 = 尖峰压垮库存，加速断货、加速少赚。",
       instruct: "拖【促销系数】从 1.4 拉到 2.5：🟡 尖峰更陡，库存断崖式下跌；再调【促销开始日】看 ▏琥珀竖虚线（= 斜率切换点）左右移动。",
       observe: "观察 🟡 尖峰：促销开始日之后 📉 绿线突然变陡（斜率 × 促销系数）。观察 ▏琥珀竖虚线：它标出「从这天起线变陡」。",
       baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, replenish: 4000, safetyDays: 21, promo: 1.4, promoDay: 60 },
@@ -180,8 +201,9 @@
     const set = new Set();
     for (let s = 0; s <= i; s++) {
       const np = STAGES[s].newParam;
-      if (!np) continue;
-      (Array.isArray(np) ? np : [np]).forEach((p) => set.add(p));
+      if (np) (Array.isArray(np) ? np : [np]).forEach((p) => set.add(p));
+      // supersedes：某个滑块被后面关卡的自动计算取代后，不再显示（比如「补货量」到 Forecast 关起改成自动算）
+      if (STAGES[s].supersedes) STAGES[s].supersedes.forEach((p) => set.delete(p));
     }
     return [...set];
   }
@@ -192,6 +214,12 @@
     for (let s = 0; s <= i; s++) if (STAGES[s].element) set.add(STAGES[s].element);
     return set;
   }
+
+  // 是否已经解锁某个元素（累计判断，取代硬编码的 si>=N——上次关卡重排就是因为写死了
+  // 序号，这次全部改成按元素名判断，以后再调顺序也不用逐处改数字）
+  function hasElement(si, name) { return unlockedElements(si).has(name); }
+  // 某个元素是「当前这一关」新引入的（不是"已解锁"，是"正是这一关"），用于只出现一次的教学标注
+  function stageIndexOf(name) { return STAGES.findIndex((s) => s.element === name); }
 
   // 每关累计的看图词典
   function dictFor(i) {
@@ -222,39 +250,59 @@
   // simulate：单次前向模拟。injectReplenish=true 时在到货日注入补货量。
   // lostSales/stockoutDays 统计的是「本来会卖出但没货」的部分（raw < 0 的那部分），
   // 而不是让库存本身变成负数——现实里库存不会是负的。
-  function simulate(p, hasLead, hasPromo, injectReplenish) {
+  //
+  // v0.11 核心修复：「决策」和「结果」彻底分开——
+  //   决策侧（什么时候下单、下多少）永远用 forecastDaily 算，因为现实里你下单那一刻
+  //   并不知道真实销量，只有预测；结果侧（库存实际怎么消耗）永远用 p.demand 算，因为
+  //   货卖出去多少是真实发生的事，不受你预测对不对影响。
+  //   hasForecastDriven=false 时 forecastDaily 等于 p.demand（前 5 关的「假设预测=真实」），
+  //   两侧用的是同一个数，跟旧版行为完全一致，不会回归；hasForecastDriven=true 时
+  //   forecastDaily 才真正等于 p.forecast，预测错了，决策就会跟着错。
+  function simulate(p, hasLead, hasPromo, hasForecastDriven, injectReplenish) {
     const inv = new Array(HORIZON + 1).fill(0);
     inv[0] = p.inventory;
-    let ordered = false, orderDay = -1, arrivalDay = -1;
-    let lostSales = 0, stockoutDays = 0, sellOutDay = -1;
+    let ordered = false, orderDay = -1, arrivalDay = -1, suggestedQty = 0;
+    let lostSales = 0, stockoutDays = 0, sellOutDay = -1, soldQty = 0;
+    const forecastDaily = hasForecastDriven ? p.forecast : p.demand;
     for (let t = 1; t <= HORIZON; t++) {
       const promoOn = hasPromo && t >= p.promoDay;
-      const c = p.demand * (promoOn ? p.promo : 1);
+      const realDemandToday = p.demand * (promoOn ? p.promo : 1);
       if (hasLead && !ordered) {
-        const cover = inv[t - 1] / (p.demand || 1);
+        // 用「预测」算还能撑几天——预测错了，这一步就会跟着错（这是本次修复的关键）
+        const cover = inv[t - 1] / (forecastDaily || 1);
         if (cover <= p.safetyDays + p.leadTime) {
           ordered = true; orderDay = t; arrivalDay = Math.min(HORIZON, t + p.leadTime);
+          // 建议补货量：这个简化模型只模拟「一次下单」（没有做周期性再订货），
+          // 所以这一次补货必须够撑到 180 天演示结束——按预测日销 × 到货后剩下的天数来算。
+          // 预测准 → 刚好够用到结束（少量安全垫剩余，接近 0 成本）；
+          // 预测偏低 → 按偏低的日销算出的量不够撑到结束 → 会在结束前再次断货 → 少赚；
+          // 预测偏高 → 按偏高的日销算出的量算多了 → 结束时还剩一大堆 → 压仓。
+          suggestedQty = Math.max(0, forecastDaily * (HORIZON - arrivalDay));
         }
       }
-      let raw = inv[t - 1] - c;
-      if (injectReplenish && arrivalDay === t && p.replenish > 0) raw += p.replenish;
+      const replenishQty = hasForecastDriven ? suggestedQty : p.replenish;
+      const available = inv[t - 1] + ((injectReplenish && arrivalDay === t && replenishQty > 0) ? replenishQty : 0);
+      const sold = Math.min(realDemandToday, available); // 结果侧：真实卖出多少，永远受真实需求和真实库存约束
+      soldQty += sold;
+      const raw = available - realDemandToday;
       if (raw < 0) { lostSales += -raw; stockoutDays++; }
       inv[t] = Math.max(0, raw);
       if (sellOutDay < 0 && inv[t] <= 0) sellOutDay = t;
     }
-    return { inv, ordered, orderDay, arrivalDay, lostSales, stockoutDays, sellOutDay };
+    return { inv, ordered, orderDay, arrivalDay, lostSales, stockoutDays, sellOutDay, suggestedQty, soldQty };
   }
 
   function computeSeries(stageIndex) {
     const p = state.current;
-    const hasLead = stageIndex >= 4;     // leadTime 在第 5 关解锁
-    const hasPromo = stageIndex >= 6;    // promo 在第 7 关解锁
+    const hasLead = hasElement(stageIndex, "leadTime");
+    const hasPromo = hasElement(stageIndex, "promo");
+    const hasForecastDriven = hasElement(stageIndex, "forecast");
 
-    const sim = simulate(p, hasLead, hasPromo, true);
+    const sim = simulate(p, hasLead, hasPromo, hasForecastDriven, true);
 
-    // 预测线（第 4 关后）：按预测日销算出的「计划库存曲线」（不 clamp，纯粹是「计划」，不代表真实库存）
+    // 预测线（Forecast 关起）：按预测日销算出的「计划库存曲线」（不 clamp，纯粹是「计划」，不代表真实库存）
     let invF = null;
-    if (stageIndex >= 3) {
+    if (hasForecastDriven) {
       invF = new Array(HORIZON + 1).fill(0);
       invF[0] = p.inventory;
       for (let t = 1; t <= HORIZON; t++) {
@@ -272,24 +320,28 @@
         arrivalDay: sim.arrivalDay,
         stockoutDays: sim.stockoutDays,
         lostSales: sim.lostSales,
+        suggestedQty: sim.suggestedQty,
+        soldQty: sim.soldQty,
         coverForecast: p.forecast > 0 ? p.inventory / p.forecast : 0,
         coverDemand: p.demand > 0 ? p.inventory / p.demand : 0,
-        endInv: sim.inv[HORIZON]
+        endInv: sim.inv[HORIZON],
+        lostMoney: sim.lostSales * UNIT_MARGIN,
+        overstockMoney: sim.inv[HORIZON] * UNIT_COST
       }
     };
   }
 
-  // 统一的「售罄时刻」：第 4 关前用连续公式（库存/日销，demand 全程不变，公式精确）；
-  // 第 4 关起（有提前期/补货/促销）demand 不再全程恒定，改用离散模拟结果。
+  // 统一的「售罄时刻」：leadTime 关之前用连续公式（库存/日销，demand 全程不变，公式精确）；
+  // leadTime 关起（有提前期/补货/促销）demand 不再全程恒定，改用离散模拟结果。
   // 这样售罄的红线位置和读数「库存覆盖」永远来自同一个数，不会再出现两套算法差一天的问题。
   function selloutMoment(si, m) {
-    if (si < 4) return m.coverDemand;
+    if (!hasElement(si, "leadTime")) return m.coverDemand;
     return m.sellOutDay;
   }
   function selloutDayLabel(si, m) {
     const v = selloutMoment(si, m);
     if (v == null || v < 0) return "—";
-    return "第 " + Math.ceil(si < 4 ? v : v + 1) + " 天";
+    return "第 " + Math.ceil(hasElement(si, "leadTime") ? v + 1 : v) + " 天";
   }
 
   /* ---------- 画布 ---------- */
@@ -339,6 +391,7 @@
     const W = state.cssW, H = state.cssH;
     if (!W || !H) return;
     const si = stageIndex == null ? state.stageIndex : stageIndex;
+    const AXIS_STAGE = stageIndexOf("axis");
     const els = unlockedElements(si);
     const series = computeSeries(si);
     const inv = series.inv;
@@ -355,8 +408,9 @@
     // 注意：yMax 必须取「最高一条刻度线」的值，而不是任意常数——否则刻度标签（如 15千）
     // 和它实际画的像素位置会对不上（数值被 clamp 到 yMax，但标签写的是更大的刻度值）。
     const xMax = HORIZON;
-    const yMaxBase = si === 0 ? 12000 : Math.max(12000, p.inventory + (p.replenish || 0));
-    const yTicks = (si === 0) ? [0, 3000, 6000, 9000, 12000] : makeTicks(yMaxBase, 4);
+    const replenishForScale = els.has("forecast") ? m.suggestedQty : p.replenish;
+    const yMaxBase = si === AXIS_STAGE ? 12000 : Math.max(12000, p.inventory + (replenishForScale || 0));
+    const yTicks = (si === AXIS_STAGE) ? [0, 3000, 6000, 9000, 12000] : makeTicks(yMaxBase, 4);
     const yMax = yTicks[yTicks.length - 1];
     const yMin = 0;
     const x = (d) => padL + (clamp(d, 0, xMax) / xMax) * plotW;
@@ -388,7 +442,7 @@
     ctx.textAlign = "left";
 
     // 第 1 关：横线 + 大字标"这是你的家底"（不画填充）
-    if (si === 0) {
+    if (si === AXIS_STAGE) {
       ctx.strokeStyle = cssVar("--green"); ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.moveTo(x(0), y(p.inventory)); ctx.lineTo(x(HORIZON), y(p.inventory)); ctx.stroke();
       ctx.fillStyle = cssVar("--ink"); ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center";
@@ -417,10 +471,10 @@
     }
     ctx.stroke();
 
-    // 红色缺货带（第 3 关起）：0 线上方的窄带，不再画负库存
+    // 红色缺货带（售罄关起）：0 线上方的窄带，不再画负库存
     if (els.has("sellout") && m.stockoutDays > 0) {
       const startMoment = selloutMoment(si, m);
-      const endDay = (si >= 4 && m.arrivalDay >= 0) ? m.arrivalDay : HORIZON;
+      const endDay = (hasElement(si, "leadTime") && m.arrivalDay >= 0) ? m.arrivalDay : HORIZON;
       if (startMoment >= 0 && startMoment <= progDay) {
         const sX = x(startMoment), eX = x(Math.min(endDay, progDay));
         const bandH = 10;
@@ -428,14 +482,32 @@
         ctx.fillRect(Math.min(sX, eX), zeroY - bandH, Math.max(2, eX - sX), bandH);
         if (progDay - startMoment > 8) {
           ctx.fillStyle = cssVar("--red"); ctx.font = "11px sans-serif"; ctx.textAlign = "center";
-          ctx.fillText("🟥 缺货 " + m.stockoutDays + " 天 · 少卖约 " + fmt(m.lostSales) + " 件", (sX + eX) / 2, zeroY - bandH - 4);
+          // Forecast 关起，缺货带的标注要把「少赚多少钱」直接写出来——这是本轮修复要解决的核心：
+          // 之前预测偏差只影响一条平行虚线，看不出任何后果；现在少卖的件数直接换算成钱。
+          const moneyTxt = els.has("forecast") ? " · 少赚 ¥" + fmt(m.lostMoney) : "";
+          ctx.fillText("🟥 缺货 " + m.stockoutDays + " 天 · 少卖约 " + fmt(m.lostSales) + " 件" + moneyTxt, (sX + eX) / 2, zeroY - bandH - 4);
           ctx.textAlign = "left";
         }
       }
     }
 
-    // 斜线中点 + 终点 教学标签（第 2 关/日销，让"日销 = 斜率"一眼可见）
-    if (si === 1 && progDay > 10 && p.demand > 0) {
+    // 压仓块（Forecast 关起）：期末还剩的库存画成右侧一块灰蓝色矩形 + 占用资金标注——
+    // 回答「预测偏高会怎样」：货没断，但钱被压在仓库里没变现。
+    if (els.has("forecast") && m.endInv > 0 && progDay === HORIZON) {
+      const boxW = 14;
+      const bx = x(HORIZON) - boxW;
+      const by = y(m.endInv);
+      ctx.fillStyle = "rgba(110,130,160,0.45)";
+      ctx.fillRect(bx, by, boxW, zeroY - by);
+      ctx.strokeStyle = "rgba(110,130,160,0.9)"; ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, boxW, zeroY - by);
+      ctx.fillStyle = cssVar("--ink"); ctx.font = "bold 11px sans-serif"; ctx.textAlign = "right";
+      ctx.fillText("🏚 压仓 " + fmt(m.endInv) + " 件 · 占用 ¥" + fmt(m.overstockMoney), x(HORIZON) - boxW - 6, by + 12);
+      ctx.textAlign = "left";
+    }
+
+    // 斜线中点 + 终点 教学标签（日销关，让"日销 = 斜率"一眼可见，只在这一关出现一次）
+    if (si === stageIndexOf("demand") && progDay > 10 && p.demand > 0) {
       const sellout = Math.floor(p.inventory / p.demand);
       const midDay = Math.min(Math.floor(sellout / 2), progDay);
       const midX = x(midDay), midY = y(inv[midDay]);
@@ -506,14 +578,15 @@
       }
     }
 
-    // 补货箭头（第 5 关起）
-    if (els.has("leadTime") && m.arrivalDay >= 0 && m.arrivalDay <= progDay && p.replenish > 0) {
+    // 补货箭头（补货关起）：Forecast 关起补货量不再是手动滑块，改成按预测自动算出的 suggestedQty
+    const replenishQtyForDraw = els.has("forecast") ? m.suggestedQty : p.replenish;
+    if (els.has("leadTime") && m.arrivalDay >= 0 && m.arrivalDay <= progDay && replenishQtyForDraw > 0) {
       const ax = x(m.arrivalDay);
       ctx.strokeStyle = cssVar("--green"); ctx.fillStyle = cssVar("--green"); ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(ax, padT + 4); ctx.lineTo(ax, padT + 22); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(ax - 5, padT + 10); ctx.lineTo(ax, padT + 2); ctx.lineTo(ax + 5, padT + 10); ctx.closePath(); ctx.fill();
       ctx.fillStyle = cssVar("--green"); ctx.font = "11px sans-serif";
-      ctx.fillText("+" + fmt(p.replenish), ax - 12, padT + 36);
+      ctx.fillText("+" + fmt(replenishQtyForDraw), ax - 12, padT + 36);
       if (m.orderDay >= 0) {
         ctx.fillStyle = cssVar("--muted"); ctx.font = "10.5px sans-serif"; ctx.textAlign = "center";
         ctx.fillText("← 提前期 " + p.leadTime + " 天 →", (x(m.orderDay) + ax) / 2, padT + 50);
@@ -531,7 +604,7 @@
         ctx.setLineDash([]);
         ctx.fillStyle = cssVar("--red"); ctx.font = "bold 11px sans-serif";
         ctx.fillText("售罄 · " + selloutDayLabel(si, m), sx + 4, padT + 12);
-        if (si === 2) {
+        if (si === stageIndexOf("sellout")) {
           ctx.fillStyle = cssVar("--red"); ctx.font = "10.5px sans-serif";
           ctx.fillText("= " + fmt(p.inventory) + "÷" + fmt(p.demand), sx + 4, padT + 26);
         }
@@ -557,9 +630,9 @@
       day: 0, headline: "起点：今天有 " + fmt(p.inventory) + " 件货",
       what: "这是你今天手里的全部库存，图上那条线的最左端。",
       why: "一切推演都从这个数开始。",
-      action: si === 0 ? "拖【期初库存】看横线怎么上下移动。" : "往右看它怎么一天天变少。"
+      action: si === stageIndexOf("axis") ? "拖【期初库存】看横线怎么上下移动。" : "往右看它怎么一天天变少。"
     }];
-    if (si >= 2) {
+    if (hasElement(si, "sellout")) {
       const moment = selloutMoment(si, m);
       if (moment >= 0) {
         events.push({
@@ -567,29 +640,31 @@
           headline: "售罄：" + selloutDayLabel(si, m) + " 库存见底",
           what: "库存掉到 0，从这天起没货可卖。",
           why: fmt(p.inventory) + " 件 ÷ 每天 " + fmt(p.demand) + " 件 ≈ " + Math.ceil(moment) + " 天。",
-          action: si >= 4 ? "看下单日是不是早于这一天——早于才来得及。" : "下一关会教你怎么提前下单避开这天。"
+          action: hasElement(si, "leadTime") ? "看下单日是不是早于这一天——早于才来得及。" : "下一关会教你怎么提前下单避开这天。"
         });
       }
     }
-    if (si >= 4 && m.orderDay >= 0) {
+    if (hasElement(si, "leadTime") && m.orderDay >= 0) {
+      const forecastNote = hasElement(si, "forecast") ? "（按你的预测算的，不是按真实销量）" : "";
       events.push({
         day: m.orderDay,
-        headline: "下单：第 " + (m.orderDay + 1) + " 天触发补货",
+        headline: "下单：第 " + (m.orderDay + 1) + " 天触发补货" + forecastNote,
         what: "库存覆盖天数掉到「安全天数 + 提前期」，规则判定该下单了。",
         why: "覆盖 ≤ 安全" + p.safetyDays + "天 + 提前期" + p.leadTime + "天 = " + (p.safetyDays + p.leadTime) + " 天时触发。",
         action: "往右看提前期之后到货箭头落在哪一天。"
       });
     }
-    if (si >= 4 && m.arrivalDay >= 0) {
+    if (hasElement(si, "leadTime") && m.arrivalDay >= 0) {
+      const qty = hasElement(si, "forecast") ? m.suggestedQty : p.replenish;
       events.push({
         day: m.arrivalDay,
-        headline: "到货：第 " + (m.arrivalDay + 1) + " 天补进 " + fmt(p.replenish) + " 件",
+        headline: "到货：第 " + (m.arrivalDay + 1) + " 天补进 " + fmt(qty) + " 件",
         what: "下单后等了 " + p.leadTime + " 天，这批货终于到了，库存被重新抬起来。",
         why: "到货日 = 下单日 + 提前期。",
         action: m.stockoutDays > 0 ? "看看到货前有没有留下一段缺货带——那是没接上的部分。" : "补货接上了，库存没有断过。"
       });
     }
-    if (si >= 6 && p.promo > 1) {
+    if (hasElement(si, "promo") && p.promo > 1) {
       events.push({
         day: p.promoDay,
         headline: "促销开始：第 " + (p.promoDay + 1) + " 天起销量放大 " + p.promo + " 倍",
@@ -628,13 +703,25 @@
     const badge = (txt, cls) => `<span class="ro-badge ${cls}">${txt}</span>`;
     const rows = [];
     rows.push(["库存", fmt(state.current.inventory) + " 件"]);
-    if (si >= 1) rows.push(["日均销量", fmt(state.current.demand) + " 件/天"]);
-    if (si >= 1) rows.push(["库存覆盖", fmt(m.coverDemand) + " 天"]);
-    if (si >= 2) rows.push(["售罄日", selloutMoment(si, m) < 0 ? "不会售罄" : selloutDayLabel(si, m)]);
-    if (si >= 2) rows.push(["缺货情况", m.stockoutDays > 0 ? badge(m.stockoutDays + " 天 · 少卖 " + fmt(m.lostSales) + " 件", "bad") : "0 天"]);
-    if (si >= 3) rows.push(["预测覆盖", fmt(m.coverForecast) + " 天" + (m.coverForecast < m.coverDemand ? " ⚠偏低" : "")]);
-    if (si >= 4) rows.push(["下单日 / 到货日", (m.orderDay >= 0 ? "第 " + (m.orderDay + 1) + " 天" : "—") + " / " + (m.arrivalDay >= 0 ? "第 " + (m.arrivalDay + 1) + " 天" : "—")]);
-    if (si >= 6) rows.push(["促销期日销", fmt(state.current.demand * state.current.promo) + " 件/天"]);
+    if (hasElement(si, "demand")) rows.push(["日均销量", fmt(state.current.demand) + " 件/天"]);
+    if (hasElement(si, "demand")) rows.push(["库存覆盖", fmt(m.coverDemand) + " 天"]);
+    if (hasElement(si, "sellout")) rows.push(["售罄日", selloutMoment(si, m) < 0 ? "不会售罄" : selloutDayLabel(si, m)]);
+    if (hasElement(si, "sellout")) rows.push(["缺货情况", m.stockoutDays > 0 ? badge(m.stockoutDays + " 天 · 少卖 " + fmt(m.lostSales) + " 件", "bad") : "0 天"]);
+    if (hasElement(si, "leadTime")) rows.push(["下单日 / 到货日", (m.orderDay >= 0 ? "第 " + (m.orderDay + 1) + " 天" : "—") + " / " + (m.arrivalDay >= 0 ? "第 " + (m.arrivalDay + 1) + " 天" : "—")]);
+    if (hasElement(si, "forecast")) {
+      // 修误导性文案：原来只说「预测覆盖…偏低」，容易被读成「你预测低了」——
+      // 现在明确区分预测偏高/偏低各自的后果（对齐 Part1.5）。
+      const gap = state.current.forecast - state.current.demand;
+      let forecastNote;
+      if (Math.abs(gap) < 1) forecastNote = "（预测≈真实，两者一致）";
+      else if (gap < 0) forecastNote = "（⚠ 你预测得比真实低 " + fmt(-gap) + " 件/天 → 会断货）";
+      else forecastNote = "（⚠ 你预测得比真实高 " + fmt(gap) + " 件/天 → 会压仓）";
+      rows.push(["预测覆盖", fmt(m.coverForecast) + " 天 " + forecastNote]);
+      rows.push(["预测建议补货量", fmt(m.suggestedQty) + " 件（按预测自动算，不再手动拖）"]);
+      rows.push(["少赚金额", m.lostMoney > 0 ? badge("¥" + fmt(m.lostMoney), "bad") : "¥0"]);
+      rows.push(["压仓占用", m.overstockMoney > 0 ? badge("¥" + fmt(m.overstockMoney), "bad") : "¥0"]);
+    }
+    if (hasElement(si, "promo")) rows.push(["促销期日销", fmt(state.current.demand * state.current.promo) + " 件/天"]);
     el.innerHTML = `<div class="ro-grid">` + rows.map(([k, v]) =>
       `<div class="ro-cell"><span class="ro-k">${k}</span><span class="ro-v">${v}</span></div>`).join("") + `</div>`;
     renderLegend(series);
@@ -655,9 +742,8 @@
       row.className = "lab-field" + (newSet.has(name) ? " glow" : "");
       row.dataset.param = name;
       row.innerHTML =
-        `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}</label><span class="lab-val" id="labVal_${name}"></span></div>` +
-        `<input type="range" id="labIn_${name}" min="${def.min}" max="${def.max}" step="${def.step}">` +
-        `<span class="lab-note">${def.note}</span>`;
+        `<div class="lab-field-top"><label>${def.label}${newSet.has(name) ? ' <span class="lab-new">新</span>' : ''}<span class="lab-note-inline">${def.note}</span></label><span class="lab-val" id="labVal_${name}"></span></div>` +
+        `<input type="range" id="labIn_${name}" min="${def.min}" max="${def.max}" step="${def.step}">`;
       wrap.appendChild(row);
       const input = row.querySelector("input");
       state.inputs[name] = input;
@@ -751,77 +837,84 @@
       where: "一条水平的绿线，横贯全图",
       why: "还没开始卖 → 库存每天都一样 → 线不上不下 = 横线；高度 = 你有几件",
       biz: "这是你的「家底」：今天手里的全部货",
-      when: (p, m, si) => si === 0
+      when: (p, m, si) => si === stageIndexOf("axis")
     },
     {
       icon: "📉", color: "--green", name: "库存斜线（绿）",
       where: "从左上往右下掉的绿线",
       why: "每过 1 天库存减「日销」件 → 线向右走 1 格就向下掉一点；斜率 = -日销，线越陡卖越快",
       biz: "你的货正在一天天变少",
-      when: (p, m, si) => si >= 1
+      when: (p, m, si) => hasElement(si, "demand")
     },
     {
       icon: "▨", color: "--green", name: "绿色填充（有货区）",
       where: "绿线下方到 0 之间的淡绿色三角形区域",
       why: "面积 = (1/2)×天数×库存 = 这批货一共卖出的总件数",
       biz: "填充越大 = 这批货能创造的总销量越多",
-      when: (p, m, si) => si >= 1
+      when: (p, m, si) => hasElement(si, "demand")
     },
     {
       icon: "▏", color: "--red", name: "红竖虚线（售罄日）",
       where: "一根从上到下的红色竖虚线 + 「售罄 · 第 N 天」标签",
       why: "竖线能精确标出「那一天」在时间轴的位置——绿线撞到 0 的那天",
       biz: "过了这天你就没货可卖了",
-      when: (p, m, si) => si >= 2 && selloutMoment(si, m) >= 0
+      when: (p, m, si) => hasElement(si, "sellout") && selloutMoment(si, m) >= 0
     },
     {
       icon: "🟥", color: "--red", name: "红色缺货带",
       where: "0 线上方一条窄窄的红色带 + 「缺货 N 天 · 少卖约 M 件」",
       why: "库存已经见底，但需求还在——这段时间你本来卖得掉却没货，不会画成负库存（现实中库存不为负）",
       biz: "少赚的钱 + 断货导致的链接权重下降",
-      when: (p, m, si) => si >= 2 && m.stockoutDays > 0
+      when: (p, m, si) => hasElement(si, "sellout") && m.stockoutDays > 0
     },
     {
       icon: "╌", color: "--purple", name: "紫虚线（你的预测）",
       where: "一条紫色的虚线，和绿线一起往下走",
-      why: "虚线 = 还没发生 = 计划；绿实线 = 真实。两线岔开 = 预测错了",
-      biz: "预测偏低会突然断货；偏高会压仓",
-      when: (p, m, si) => si >= 3
+      why: "虚线 = 还没发生 = 计划；绿实线 = 真实。两线岔开 = 预测错了——这一关起，下单时机和下单量都改成按这条线算，不再按真实销量算",
+      biz: "预测偏低会断货少赚；偏高会压仓占钱",
+      when: (p, m, si) => hasElement(si, "forecast")
+    },
+    {
+      icon: "🏚", color: "--muted", name: "灰蓝压仓块",
+      where: "最右侧（第 180 天）一块灰蓝色矩形，贴着库存线顶部",
+      why: "预测偏高 → 按预测多下了单 → 到最后还剩这么多没卖完",
+      biz: "占用资金 = 剩余件数 × 采购成本，这些钱变不成现金",
+      when: (p, m, si) => hasElement(si, "forecast") && m.endInv > 0
     },
     {
       icon: "🔻", color: "--green", name: "绿箭头（补货到货）",
       where: "顶部一个绿色向上箭头 + 「+N」件数",
       why: "箭头指向「到货那一刻」在时间轴的位置 = 下单日 + 提前期",
       biz: "货从下单到可售要等提前期，等太久就先断货",
-      when: (p, m, si) => si >= 4 && m.arrivalDay >= 0
+      when: (p, m, si) => hasElement(si, "leadTime") && m.arrivalDay >= 0
     },
     {
       icon: "⚌", color: "--amber", name: "琥珀横虚线（安全线）",
       where: "一条水平的琥珀色虚线 + 「⚠ 安全线 N 件」",
       why: "高度 = 安全天数 × 日销；绿线掉到这条线 = 立刻下单的信号",
       biz: "不等售罄才补货，提前下单躲开缺货带",
-      when: (p, m, si) => si >= 5 && p.safetyDays > 0
+      when: (p, m, si) => hasElement(si, "safety") && p.safetyDays > 0
     },
     {
       icon: "▏", color: "--amber", name: "琥珀竖虚线（促销开始）",
       where: "促销开始日位置一根琥珀色竖虚线",
       why: "标出「从这天起斜率切换」——线从这里开始突然变陡",
       biz: "大促开始的那一刻",
-      when: (p, m, si) => si >= 6 && p.promo > 1
+      when: (p, m, si) => hasElement(si, "promo") && p.promo > 1
     },
     {
       icon: "🟡", color: "--amber", name: "促销尖峰",
       where: "竖虚线右侧，绿线突然变陡的那一段",
       why: "促销期日销 × 促销系数 → 斜率放大 → 更陡 = 尖峰",
       biz: "光加广告不补货 = 尖峰压垮库存，加速断货",
-      when: (p, m, si) => si >= 6 && p.promo > 1
+      when: (p, m, si) => hasElement(si, "promo") && p.promo > 1
     },
     {
       icon: "●", color: "--purple", name: "紫色播放头",
       where: "一键模拟/拖动播放条时的竖线 + 圆点",
       why: "标出「播到第几天」，圆点吸在当天的库存值上；侧栏「现在图上发生了什么」跟着它同步描述当天状态",
       biz: "带你逐天检查库存怎么变",
-      when: (p, m, si) => si >= 1
+      when: (p, m, si) => hasElement(si, "demand")
     }
   ];
 
@@ -1065,24 +1158,9 @@
     }
   };
 
-  function setupHeaderHeightVar() {
-    const header = document.querySelector("header");
-    if (!header) return;
-    const update = () => {
-      document.documentElement.style.setProperty("--header-h", header.getBoundingClientRect().height + "px");
-    };
-    update();
-    if (window.ResizeObserver) {
-      new ResizeObserver(update).observe(header);
-    } else {
-      window.addEventListener("resize", update);
-    }
-  }
-
   function init() {
     state.canvas = $("labCanvas");
     if (!state.canvas) return;
-    setupHeaderHeightVar();
     applyStage(0);
 
     $("labPlay").addEventListener("click", autoDemo);

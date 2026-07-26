@@ -22,6 +22,28 @@
 
 ## 版本记录
 
+### v0.11.0 - 2026-07-26
+
+状态：打通 Forecast 因果链。用户看第 6 关（当时是"预测"）问"我预测失败了，少赚钱怎么没体现"，追代码发现问题比表象更深——`forecast` 滑块从头到尾不影响任何结果（下单时机判断一直用真实日销算），是个纯装饰。用户同时指出界面还要再省空间（Tab 占一整行、滑块说明文案占一整行）。
+
+**根因**：`lab-core.js` 的 `simulate()` 里补货触发判断 `cover = inv[t-1]/(p.demand||1)` 用的是真实日销，等于假设你有上帝视角，事先就知道明天能卖多少。现实里 Forecast 的全部意义恰恰是「你不知道真实需求，只能凭预测做决策」。
+
+**改动**：
+- `simulate()`/`computeSeries()` 重写：新增 `forecastDaily = hasForecastDriven ? p.forecast : p.demand`，决策侧（下单时机、下单量）永远用它算，结果侧（真实消耗）永远用 `p.demand` 算。`hasForecastDriven` 由 `hasElement(si,"forecast")` 判定——前 5 关该值为 false，`forecastDaily` 等于 `p.demand`，行为与 v0.10 完全一致（用测试验证了"还原成 forecast=demand 后与首次结果一致"，非漂移）；到 Forecast 关起才真正等于 `p.forecast`。
+- `STAGES` 重排：坐标系→日销→售罄→**补货→安全**→**预测（大 boss）**→促销（原顺序是坐标系→日销→售罄→预测→补货→安全→促销）。前 5 关 baseline 统一 `forecast===demand`，第 6 关（Forecast）的 baseline 特意调小到 `inventory:5000, leadTime:30`（而不是沿用前面的 8000/140）——否则单次补货模型里，140 天提前期 + 180 天演示窗口根本放不下一整个"下单→到货→卖完"的周期，即使预测完全准确也会产生大量虚假压仓/断货，掩盖了预测误差本身的效果。
+- 全文件搜索替换硬编码的 `si >= N` / `si === N`（十几处，分布在 `computeSeries`/`selloutMoment`/`draw`/`computeEvents`/`updateReadout`/`LEGEND[].when`），改成 `hasElement(si, name)`（累计判断）或 `si === stageIndexOf(name)`（仅当前关判断）。新增 `unlockedParams()` 的 `supersedes` 机制：Forecast 关起 `replenish` 滑块从 `newParam` 集合里被移除，改成用 `suggestedQty = forecastDaily*(HORIZON-arrivalDay)` 自动算（这个公式也调了两版：第一版 `forecastDaily*(safetyDays+leadTime)` 会因为"订单本来就是在库存刚跌破警戒线那一刻触发的"而使订购量趋近于 0，完全看不出预测越高订得越多；改成按"到货后需要撑到演示结束"来算，预测准时接近 0 成本，预测错时误差被放大成显著的少赚/压仓数字）。
+- 金额换算：单件毛利/成本口径取自 `D:\Desktop\Govee\利润表.xlsx`（EU 原价 €79.99，采购+头程+尾程成本约 31，净利率 12%~25%），在 `lab-core.js` 内部独立定义 `UNIT_PRICE=79/UNIT_COST=31`（不依赖 index.html 的全局，因为 lab-core.js 是独立 IIFE，`verify_lab.js` 的 jsdom 环境也不加载 index.html 内联 script）。新增 `lostMoney`/`overstockMoney` 指标，图上补货缺口标注金额、期末剩货画灰蓝压仓块 + 金额。
+- 修 v0.10 引入的一个真实回归：`--header-h` 由 `ResizeObserver` 测量，但在过渡态测到一次偏高值（343.5px，实际只有 63px）后不再更新，导致讲解区 `.lab-scroll` 被压到只剩 26px 高。改用纯 CSS flex（新增 `.app.lab-mode`，`switchTab("lab")` 时切换该 class），高度由浏览器自己算，彻底删除 `setupHeaderHeightVar()`。
+- 顶栏收窄：`teach-core.js` 的 tabbar 从 `header.parentNode.insertBefore(bar, header.nextSibling)`（独立一行）改成 `header.insertBefore(bar, actions)`（并入品牌行，flex order 排布），省下一整行高度。滑块 `.lab-note` 文案从独立一行改成 `.lab-note-inline` 并入 `.lab-field-top` 标签行。
+- 本地 `python -m http.server` 不发 `Cache-Control` 头，浏览器会缓存旧 JS，调试时"改了没生效"排查了很久——给三个 `<script src>` 加了 `?v=` 版本串，每次改 JS 记得同步更新。
+
+**验证**：
+- `verify_lab.js` 改用 `_debug.applyStage(idxOf(name))` 按元素名直接跳关（不再靠点击次数推断位置，重排后旧写法会脆弱失效），扩到 **64 项断言**，全过。新增专项：forecast 改变时 orderDay/lostMoney/overstockMoney 真的会变、预测偏低单调增少赚、预测偏高单调增压仓、还原到 forecast=demand 后结果与首次一致（非漂移）。
+- 浏览器实测：forecast=48(准)/20(低估)/120(高估) 三档对比，orderDay 62→87→1，lostMoney 0→132480→0，overstockMoney 0→0→441440，方向和量级符合预期。
+- 1280×800 视口下 7 关逐一截图确认布局不溢出（stage/actions 底部均 <800px）。
+
+遗留：`sku-simulator-mvp.html` 仍是废弃单文件版，未清理；教学训练 Tab 尚未按"先学后练"重构（用户原计划的 Phase 2，本轮聚焦在动画实验室的 Forecast 因果修复上）。
+
 ### v0.10.0 - 2026-07-26
 
 状态：动画实验室体验重构。用户用真实截图指出 v0.9.3 的坐标轴设计从根上算错了（日销翻倍，屏幕斜率反而变平），并列了一整份体验问题清单（布局被切、无解析、无撤销、教学训练太乱）。本次是 Phase 1（实验室部分），Phase 2（教学训练重构）与 Phase 3（Govee 真实数据导入）见计划文档。
