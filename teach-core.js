@@ -176,13 +176,62 @@
   }
 
   /* ============================================================
+   * 渲染：「先学」讲解块（v0.16）
+   * 分两层：
+   *  - 兜底层：11 章都有的 ch.concept / ch.analogy——这两个字段以前写好了但从没渲染过，
+   *    是彻底的死数据，这里救活它，未做样板的章节立刻从"零教学"变成"有概念+有类比"。
+   *  - 增强层：章节若带 ch.lesson（本轮只有 c1/c5 两章样板），按更丰富的结构渲染，
+   *    覆盖兜底层。字段全部可选，缺什么就跳过什么。
+   * ============================================================ */
+  function renderLesson(ch) {
+    const L = ch.lesson;
+    if (!L) {
+      return `
+        <div class="ls-block">
+          <div class="ls-card"><h3>概念</h3><p>${ch.concept || ""}</p></div>
+          ${ch.analogy ? `<div class="ls-analogy"><b>打个比方：</b>${ch.analogy}</div>` : ""}
+        </div>`;
+    }
+    const cardsHTML = (L.cards || []).map((c) =>
+      `<article class="ls-card ${c.tone || ""}"><h3>${c.h}</h3><p>${c.p}</p>${c.formula ? `<div class="ls-formula">${c.formula}</div>` : ""}</article>`
+    ).join("");
+    const workedHTML = L.worked ? `
+      <div class="ls-section">
+        <div class="ls-label">标准例题 · 有固定答案</div>
+        <div class="ls-case">${L.worked.case}</div>
+        <ol class="ls-steps">${L.worked.steps.map((s) => `<li>${s}</li>`).join("")}</ol>
+        <div class="ls-answer">${L.worked.answer}</div>
+      </div>` : "";
+    const contrastHTML = L.contrast ? `
+      <div class="ls-section">
+        <div class="ls-label">对照 · 哪种写法合格</div>
+        <div class="ls-contrast">
+          <div class="ls-contrast-col bad"><div class="ls-contrast-tag">✗ 不合格</div><p>${L.contrast.bad}</p></div>
+          <div class="ls-contrast-col good"><div class="ls-contrast-tag">✓ 合格</div><p>${L.contrast.good}</p></div>
+        </div>
+        <p class="ls-contrast-why">${L.contrast.why}</p>
+      </div>` : "";
+    const sayHTML = L.say ? `<div class="ls-say">${L.say}</div>` : "";
+    return `
+      <div class="ls-block">
+        ${L.scene ? `<p class="ls-scene">${L.scene}</p>` : ""}
+        ${cardsHTML ? `<div class="ls-cards">${cardsHTML}</div>` : ""}
+        ${workedHTML}
+        ${contrastHTML}
+        ${sayHTML}
+      </div>`;
+  }
+
+  /* ============================================================
    * 渲染：章节详情（经验循环）
    * ============================================================ */
   function openChapter(id) {
     const ch = CHAPTERS.find(c => c.id === id);
     if (!ch || !isUnlocked(ch)) return;
     state.chapterId = id;
-    state.step = 0;
+    // v0.16：先学后练——step=-1 是「先学」讲解阶段，跟六步循环（step 0-6）分开渲染，
+    // 不再让长篇教学文案和练习挤在同一屏抢注意力。
+    state.step = -1;
     state.draft = { obs: [], forecast: null, reason: null, confidence: 50, root: null, rule: "" };
     renderChapter();
   }
@@ -192,6 +241,27 @@
     const loop = ch.loop;
     const d = state.draft;
     const view = $("teachView");
+
+    // v0.16「先学」阶段：只讲概念，不出现任何练习步骤——长文案和判断题挤在同一屏
+    // 互相干扰，是用户反馈"教学训练不够好"的直接原因之一。
+    if (state.step === -1) {
+      view.innerHTML = `
+        <div class="chapter-detail">
+          <button class="back-link" data-act="home">← 返回章节列表</button>
+          <div class="cd-head">
+            <span class="cd-icon">${ch.icon}</span>
+            <div>
+              <div class="eyebrow">${ch.type === "opt" ? "选学" : "第" + ch.n + "章"} · 先学</div>
+              <h2>${(ch.lesson && ch.lesson.headline) || ch.title}</h2>
+            </div>
+          </div>
+          ${renderLesson(ch)}
+          <button class="primary-btn ls-start-btn" data-act="startPractice">我懂了，开始练 →</button>
+        </div>
+      `;
+      bindChapterEvents(ch);
+      return;
+    }
 
     const obsTable = ch.observe.labels.map((lb, i) =>
       `<div class="obs-row"><span>${lb}</span><b>${ch.observe.values[i]}</b></div>`).join("");
@@ -333,9 +403,10 @@
         <div class="cd-head">
           <span class="cd-icon">${ch.icon}</span>
           <div>
-            <div class="eyebrow">${ch.type === "opt" ? "选学" : "第" + ch.n + "章"}</div>
+            <div class="eyebrow">${ch.type === "opt" ? "选学" : "第" + ch.n + "章"} · 自由判断，没有唯一答案</div>
             <h2>${ch.title}</h2>
           </div>
+          <button class="ghost-link" data-act="backToLesson">↩ 回看讲解</button>
         </div>
         <div class="problem-box"><b>真实问题：</b>${ch.problem}</div>
         ${stepObserve}
@@ -393,6 +464,8 @@
       btn.addEventListener("click", () => {
         const act = btn.dataset.act;
         if (act === "home") { state.view = "home"; renderHome(); }
+        else if (act === "startPractice") { state.step = 0; renderChapter(); }
+        else if (act === "backToLesson") { state.step = -1; renderChapter(); }
         else if (act === "next") {
           // 进入判断前，确保观察已记录（无所谓对错）
           if (state.step === 0) state.step = 1;
@@ -561,7 +634,7 @@
     .secondary-btn{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:12px 22px;border-radius:12px;font:inherit;cursor:pointer;}
     .chapter-detail{max-width:760px;margin:0 auto;}
     .back-link{background:none;border:none;color:var(--accent-2);font:inherit;cursor:pointer;padding:8px 0;font-size:14px;}
-    .cd-head{display:flex;gap:12px;align-items:center;margin:6px 0 14px;}
+    .cd-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:6px 0 14px;}
     .cd-icon{font-size:30px;}
     .eyebrow{font-size:12px;color:var(--accent-2);font-weight:700;letter-spacing:.5px;}
     .problem-box{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:14px;margin-bottom:16px;line-height:1.7;}
@@ -607,7 +680,37 @@
       .score-grid{grid-template-columns:repeat(2,1fr);}
       .obs-table{grid-template-columns:1fr;}
       .teach-hero h1{font-size:22px;}
-    }`;
+    }
+    /* v0.16「先学」讲解块——用 auto-fit/minmax 而不是写死的媒体断点让卡片自己换行，
+       跟视口宽度无关；子项都给了 min-width:0，容器再窄也不会撑出横向滚动条（项目死规矩）。 */
+    .ls-block{margin-bottom:16px;}
+    .ghost-link{background:none;border:1px solid var(--line);color:var(--ink-soft);font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;cursor:pointer;margin-left:auto;white-space:nowrap;}
+    .ghost-link:hover{border-color:var(--accent);color:var(--accent-2);}
+    .ls-scene{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:14px;margin-bottom:14px;line-height:1.7;font-size:14px;}
+    .ls-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px;}
+    .ls-card{background:var(--paper);border:1px solid var(--line);border-top:3px solid var(--line);border-radius:14px;padding:16px;min-width:0;}
+    .ls-card.accent{border-top-color:var(--accent);}
+    .ls-card h3{font-size:15px;margin:0 0 8px;}
+    .ls-card p{font-size:13.5px;color:var(--ink-soft);line-height:1.6;margin:0;}
+    .ls-formula{margin-top:10px;background:var(--accent-soft);border-radius:8px;padding:8px 10px;font:700 14px Consolas,monospace;color:var(--accent-2);word-break:break-word;overflow-wrap:break-word;}
+    .ls-section{margin-bottom:14px;}
+    .ls-label{font-size:12px;font-weight:700;color:var(--accent-2);letter-spacing:.5px;margin-bottom:8px;}
+    .ls-case{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px;margin-bottom:10px;line-height:1.6;}
+    .ls-steps{counter-reset:ls;list-style:none;padding:0;margin:0 0 10px;}
+    .ls-steps li{position:relative;padding:8px 0 8px 34px;font-size:14px;color:var(--ink-soft);line-height:1.5;}
+    .ls-steps li:before{counter-increment:ls;content:counter(ls);position:absolute;left:0;top:8px;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent-2);text-align:center;line-height:22px;font:700 11px Consolas,monospace;}
+    .ls-answer{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.6;}
+    .ls-contrast{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:10px;}
+    .ls-contrast-col{border-radius:10px;padding:12px 14px;font-size:13.5px;min-width:0;line-height:1.6;}
+    .ls-contrast-col.bad{background:var(--red-soft);}
+    .ls-contrast-col.good{background:var(--green-soft);}
+    .ls-contrast-tag{font-size:12px;font-weight:700;margin-bottom:6px;}
+    .ls-contrast-col.bad .ls-contrast-tag{color:var(--red);}
+    .ls-contrast-col.good .ls-contrast-tag{color:var(--green);}
+    .ls-contrast-why{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0;}
+    .ls-say{background:var(--panel);border-left:3px solid var(--accent-2);border-radius:10px;padding:12px 14px;margin-top:14px;font-size:13.5px;color:var(--ink-soft);line-height:1.6;}
+    .ls-card.ls-analogy,.ls-analogy{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13.5px;color:var(--ink-soft);line-height:1.6;margin-top:12px;}
+    .ls-start-btn{width:100%;text-align:center;font-size:15px;padding:14px;}`;
     const style = document.createElement("style");
     style.id = "teachStyle";
     style.textContent = css;
