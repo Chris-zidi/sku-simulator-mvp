@@ -333,6 +333,18 @@
         verdict = Math.abs(pct) <= 5 ? "✅ 较准确（±5%内）"
           : diff > 0 ? `📈 高估约 ${pct.toFixed(0)}%` : `📉 低估约 ${Math.abs(pct).toFixed(0)}%`;
       }
+      // v0.17：① 观察勾选的每一项都有对错（loop.observeOptions[i].exp），之前只拿它算了一个
+      // 隐藏的分数，从没告诉用户哪几项该勾、为什么——现在逐项列出命中/漏选/误选 + why 解析，
+      // 复盘才有具体收获，而不是只看一个抽象分数。
+      const obsReviewRows = loop.observeOptions.map((o, i) => {
+        const checked = d.obs.includes(i);
+        let cls, icon, tag;
+        if (o.exp && checked) { cls = "hit"; icon = "✓"; tag = "命中"; }
+        else if (o.exp && !checked) { cls = "miss"; icon = "○"; tag = "漏选"; }
+        else if (!o.exp && checked) { cls = "wrong"; icon = "✗"; tag = "误选"; }
+        else { cls = "skip"; icon = "·"; tag = "正确跳过"; }
+        return `<div class="obs-review-row ${cls}"><span class="obs-review-icon">${icon}</span><div class="obs-review-body"><div class="obs-review-head"><b>${o.k}</b><span class="obs-review-tag">${tag}</span></div>${o.why ? `<p>${o.why}</p>` : ""}</div></div>`;
+      }).join("");
       resultHTML = `
         <div class="loop-step">
           <div class="step-tag">④ 看结果</div>
@@ -346,6 +358,8 @@
             <div class="rc-verdict">${verdict}</div>
             <p class="rc-note">${loop.truth.note}</p>
           </div>
+          <h3 class="obs-review-title">你的观察复盘 <span class="obs-review-legend">✓ 命中 · ○ 漏选 · ✗ 误选</span></h3>
+          <div class="obs-review-list">${obsReviewRows}</div>
           <button class="primary-btn" data-act="next">下一步 · 复盘</button>
         </div>`;
     }
@@ -710,7 +724,28 @@
     .ls-contrast-why{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0;}
     .ls-say{background:var(--panel);border-left:3px solid var(--accent-2);border-radius:10px;padding:12px 14px;margin-top:14px;font-size:13.5px;color:var(--ink-soft);line-height:1.6;}
     .ls-card.ls-analogy,.ls-analogy{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13.5px;color:var(--ink-soft);line-height:1.6;margin-top:12px;}
-    .ls-start-btn{width:100%;text-align:center;font-size:15px;padding:14px;}`;
+    .ls-start-btn{width:100%;text-align:center;font-size:15px;padding:14px;}
+    /* v0.17：① 观察逐项复盘——每行左边一个色块图标 + 右边文字/解析，min-width:0 防止长解析
+       撑宽整行（项目死规矩：任何容器不许横向滚动）。 */
+    .obs-review-title{font-size:15px;margin:16px 0 10px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+    .obs-review-legend{font-size:12px;font-weight:400;color:var(--ink-soft);}
+    .obs-review-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+    .obs-review-row{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;}
+    .obs-review-icon{flex-shrink:0;width:22px;height:22px;border-radius:50%;text-align:center;line-height:22px;font-weight:700;font-size:13px;}
+    .obs-review-body{min-width:0;flex:1;}
+    .obs-review-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;}
+    .obs-review-body b{font-size:14px;}
+    .obs-review-body p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:4px 0 0;}
+    .obs-review-tag{font-size:11px;font-weight:700;flex-shrink:0;white-space:nowrap;}
+    .obs-review-row.hit .obs-review-icon{background:var(--green-soft);color:var(--green);}
+    .obs-review-row.hit .obs-review-tag{color:var(--green);}
+    .obs-review-row.miss .obs-review-icon{background:var(--amber-soft);color:var(--amber);}
+    .obs-review-row.miss .obs-review-tag{color:var(--amber);}
+    .obs-review-row.wrong .obs-review-icon{background:var(--red-soft);color:var(--red);}
+    .obs-review-row.wrong .obs-review-tag{color:var(--red);}
+    .obs-review-row.skip{opacity:.6;}
+    .obs-review-row.skip .obs-review-icon{background:var(--panel);color:var(--muted);border:1px solid var(--line);}
+    .obs-review-row.skip .obs-review-tag{color:var(--muted);}`;
     const style = document.createElement("style");
     style.id = "teachStyle";
     style.textContent = css;
