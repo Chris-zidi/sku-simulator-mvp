@@ -22,6 +22,31 @@
 
 ## 版本记录
 
+### v0.14.1 - 2026-07-26
+
+状态：修参数控制栏横向溢出。v0.14.0 刚推送，用户就发截图反馈"为啥中间这块会挤在一起呢？不要这样啊，不需要这种左右移动，很干扰视野的""你还要适配一下浏览器缩放的比例""越到后面压的越扁"。
+
+**根因诊断**（用 javascript_tool 在真实浏览器里量出来的，不是猜的）：
+1. `.lab-params { display:grid; gap:6px }` 没写 `grid-template-columns`——隐式网格列按内容最大宽度定轨。v0.14 新增的 choice 按钮组（物流方式/安全库存参考）是这一关里内容最宽的一行，把整个 `.lab-params` 列撑到 373px 宽，而 `.lab-controls` 栏本身只有 313px——所有行（包括普通滑块）跟着被逼宽。
+2. `.lab-field` 没设 `min-width:0`，作为 grid item 默认 `min-width:auto`（= 内容最小宽度），没法被压缩到容器宽度以下。
+3. `.lab-controls` 设了 `overflow-y:auto` 但没显式设 `overflow-x`——CSS 规范规定这种情况下 `overflow-x` 会隐式算成 `auto`（不是 `visible`），于是横向溢出的 60px 内容变成了一条横向滚动条，而不是自然换行或裁切——这正是截图里那条碍眼的横条的来源。
+4. `.lab-choice-group` 原来用 `display:flex; flex-wrap:wrap`，4 个按钮换行后如果只剩 1 个孤立在新行，`flex-grow:1` 会让它独占整行宽度（截图里"旺季爆仓·140天"那个异常宽的按钮）。
+5. `.lab-grid` 三栏 `minmax()` 地板：图表栏是 `minmax(0, 1.25fr)`，地板=0——窄屏或浏览器缩放导致有效视口变窄时，参数栏（220px）和文案栏（260px）的地板加起来先占满空间，图表栏被挤到接近 0，画布会被压成一条缝。原有的单一断点在 999px，而三栏地板之和（900px 左右）离断点太近，缩放到 110%~125% 时会落在"三栏但地板已经顶到头"的尴尬过渡区间，各栏硬挤变形。
+
+**改法**：
+- `.lab-params` 显式 `grid-template-columns: minmax(0, 1fr)`；`.lab-field`/`.lab-field-top` 补 `min-width: 0`——这是修复的关键一行，让 grid 列真正能收缩到容器宽度，不再被内容撑大。
+- `.lab-choice-group` 从 `flex-wrap` 改成 `display:grid; grid-template-columns:repeat(2, minmax(0,1fr))`——固定两列，四个按钮永远等宽换行，不会再出现某个按钮忽然占满整行的怪样子；按钮内文字加 `white-space:normal; word-break:break-word` 允许换行，不再依赖裁切。
+- `.lab-controls`/`.lab-lesson` 显式加 `overflow-x: hidden`——横向溢出一律裁掉，不给浏览器机会自动生成横向滚动条。这条连同上面的 `min-width:0` 一起写进了代码注释里，作为以后加新参数类型时的硬性检查项。
+- `.lab-grid` 三栏都补上 min 地板：`minmax(360px, 1.25fr) minmax(220px, 0.75fr) minmax(260px, 1.05fr)`——图表栏不会再被压没；断点从 `max-width:999px` 提到 `max-width:1100px`，缩放到常见的 110%/125%/150% 都会落在单列堆叠这一侧，不再卡中间。
+- 顺带把 `.lab-field` padding（7px→6px）、`.lab-params` gap（6px→5px）收紧了一点，纵向更紧凑。
+
+**验证**：
+- 浏览器实测（`javascript_tool` 直接量 `scrollWidth - clientWidth`，比截图更可靠）：1920/1440/1150/1050/768 五档视口宽度下，`.lab-controls`/`.lab-lesson`/`body` 的横向溢出量全部是 **0**；促销关（参数最多，8 个滑块+按钮）逐行检查也全部 0 溢出；1100px 断点前后分别确认三栏布局与单列堆叠都正常切换（用 `getComputedStyle(grid).gridTemplateColumns` 直接验证）。
+- 中途踩了一个测试坑：改完 CSS 第一次量还是溢出，一模一样的数字——是 `python -m http.server` 不发缓存头、浏览器却缓存了旧 `index.html`（内联 CSS 在 HTML 里，没有 `?v=` 保护），加 `?nocache=` 查询串强制绕过缓存后才量到新样式生效。
+- `verify_lab.js` 复跑 80 项断言全过（纯 CSS 布局改动，不涉及任何计算逻辑）。
+
+遗留：教学训练 Tab「先学后练」重构仍未开始；`sku-simulator-mvp.html` 废弃单文件版仍未清理。
+
 ### v0.14.0 - 2026-07-26
 
 状态：下单日改成玩家直接决策，提前期改成物流方式选择。用户看着「安全库存」关截图问"我还可以觉得补货提前期的长度的吗？我能掌控游戏规则的吗？不应该吧，我应该能掌控的是我决定下单的那一天"，追问更明确："安全库存天数应该就几种模式吧？我什么时候决定下单才是影响的关键因素吧？"

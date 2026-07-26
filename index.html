@@ -955,7 +955,11 @@
     #labView[hidden] { display: none; }
     .lab-wrap { height: 100%; }
     /* v0.13：三栏布局——图表 | 参数控制（窄，够用就行）| 教学文案（独立一栏，给足空间看长解释） */
-    .lab-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(220px, 0.75fr) minmax(260px, 1.05fr); gap: 14px; height: 100%; padding: 10px 0; }
+    /* 三栏都给了 min 地板（360/220/260）——图表栏之前是 minmax(0,...)，地板=0，意味着窄屏/高缩放
+       下参数栏和文案栏会先占满地板宽度，图表栏被挤到接近 0（画布会被压成一条缝）。现在三栏都有
+       地板，地板之和 + gap 一旦超出视口，直接由下面 1100px 断点整体切换成单列堆叠，不留「三栏还
+       挤在一起硬撑」的中间地带。 */
+    .lab-grid { display: grid; grid-template-columns: minmax(360px, 1.25fr) minmax(220px, 0.75fr) minmax(260px, 1.05fr); gap: 14px; height: 100%; padding: 10px 0; }
     /* --- 左：舞台（永不滚动，永远完整可见） --- */
     .lab-stage { height: 100%; display: flex; flex-direction: column; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-width: 0; min-height: 0; overflow: hidden; }
     .lab-stage-top { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-bottom: 8px; flex-wrap: wrap; }
@@ -977,8 +981,12 @@
     .lab-actions { display: flex; gap: 8px; margin-top: 8px; flex-shrink: 0; }
     .lab-actions .primary-btn { flex: 1; min-width: 0; }
     .lab-actions .ghost-btn { flex: 1; min-width: 0; }
-    /* --- 中：参数控制栏（窄，够放滑块+按钮就行，自己可以滚） --- */
-    .lab-controls { height: 100%; min-height: 0; overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+    /* --- 中：参数控制栏（窄，够放滑块+按钮就行，自己可以滚） ---
+       死规矩：这一栏及其子孙元素永远不允许出现横向滚动条——横向溢出一律裁掉（overflow-x:hidden），
+       不能让任何一行内容把整栏撑宽。v0.14 曾因 choice 按钮组缺 min-width:0 导致 grid 列被撑宽到
+       373px（栏宽只有 313px），因为 overflow-y:auto 会让浏览器把 overflow-x 也隐式算成 auto，
+       于是出现了一条横向滚动条——这条规则就是防止同类问题再犯。 */
+    .lab-controls { height: 100%; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
     .lab-controls h2 { font-size: 14px; margin: 0 0 6px; line-height: 1.35; }
     .lab-elements { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
     .lab-chip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--surface-2); white-space: nowrap; transition: all .2s; }
@@ -988,16 +996,21 @@
     .lab-nodecard { font-size: 12px; line-height: 1.55; color: var(--ink); background: var(--accent-soft); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; }
     .lab-nodecard b { color: var(--ink); }
     .lab-nodecard .lab-nodecard-title { display: block; font-size: 10.5px; font-weight: 700; color: var(--accent); margin-bottom: 3px; }
-    .lab-params { display: grid; gap: 6px; margin-top: 2px; }
-    .lab-field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; transition: box-shadow .25s, border-color .25s; }
+    /* grid-template-columns 必须显式写 minmax(0,1fr)——不写的话隐式列按内容最大宽度定轨，
+       任何一行（哪怕只是 choice 按钮组）内容稍宽，整列跟着被撑宽，栏内所有行全部遭殃。 */
+    .lab-params { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; margin-top: 2px; }
+    .lab-field { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-width: 0; transition: box-shadow .25s, border-color .25s; }
     .lab-field.glow { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-    .lab-field-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+    .lab-field-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 3px; min-width: 0; }
     .lab-field-top label { font-size: 13px; font-weight: 600; display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; }
     .lab-val { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
     .lab-note-inline { font-size: 10.5px; font-weight: 400; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
     .lab-field input[type=range] { width: 100%; accent-color: var(--accent); }
-    .lab-choice-group { display: flex; flex-wrap: wrap; gap: 6px; }
-    .lab-choice-btn { flex: 1 1 auto; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 5px 8px; font-size: 11.5px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
+    /* choice 按钮组用 CSS Grid 固定两列，而不是 flex-wrap——flex-wrap 下最后一个单独换行的按钮会
+       被 flex-grow 撑成整行宽（v0.14 截图里"旺季爆仓·140天"单独占一整行的怪样子），grid 两列
+       宽度始终均分，不会有按钮忽宽忽窄。 */
+    .lab-choice-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; min-width: 0; }
+    .lab-choice-btn { min-width: 0; background: var(--panel); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 5px 6px; font-size: 11.5px; line-height: 1.3; white-space: normal; word-break: break-word; cursor: pointer; transition: background .15s, border-color .15s, color .15s; }
     .lab-choice-btn:hover { border-color: var(--accent); }
     .lab-choice-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
     .lab-nav { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
@@ -1006,7 +1019,7 @@
     .lab-nav button.icon-only { flex: 0 0 auto; min-width: 0; padding: 8px 12px; }
     .lab-nav button:disabled { opacity: .4; cursor: not-allowed; }
     /* --- 右：教学文案栏（独立一整栏，不用跟参数抢空间） --- */
-    .lab-lesson { height: 100%; min-height: 0; overflow-y: auto; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+    .lab-lesson { height: 100%; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
     .lab-hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin: 12px 0 0; border-top: 1px dashed var(--line); padding-top: 10px; }
     /* ===== 侧栏可折叠卡片 ===== */
     .lab-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 0; margin-bottom: 10px; overflow: hidden; }
@@ -1039,7 +1052,11 @@
     .ghost-btn { font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
     .ghost-btn:active { transform: translateY(1px); }
     .lab-demo-badge { position: absolute; top: 8px; left: 8px; background: rgba(120,90,255,.9); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; pointer-events: none; }
-    @media (max-width: 999px) {
+    /* 断点从 999px 提到 1100px：三栏地板之和（360+220+260+2×14 gap=868）加上 #labView 左右
+       padding（32px）逼近 900px，留的余量太小——浏览器缩放到 110%~125% 时视口有效宽度正好卡
+       在这段「三栏但地板已经顶到头」的尴尬区间，各栏会硬挤变形。提前在 1100px 切换成单列堆叠，
+       缩放到常见的 110%/125%/150% 时都能落在某一侧，不会卡在中间难看的过渡态。 */
+    @media (max-width: 1100px) {
       #labView { height: auto; overflow: visible; padding: 0 12px 40px; }
       .lab-grid { grid-template-columns: 1fr; height: auto; }
       .lab-stage { height: 55vh; min-height: 340px; }
@@ -2109,8 +2126,8 @@
   });
 })();
 </script>
-<script src="teach-data.js?v=20260726r"></script>
-<script src="teach-core.js?v=20260726r"></script>
-<script src="lab-core.js?v=20260726r"></script>
+<script src="teach-data.js?v=20260726s"></script>
+<script src="teach-core.js?v=20260726s"></script>
+<script src="lab-core.js?v=20260726s"></script>
 </body>
 </html>
