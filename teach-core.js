@@ -550,16 +550,19 @@
     const teach = $("teachView");
     const sand = $("sandboxView");
     const lab = $("labView");
-    const tb = $("tabTeach"), sb = $("tabSandbox"), lb = $("tabLab");
+    const desk = $("deskView");
+    const tb = $("tabTeach"), sb = $("tabSandbox"), lb = $("tabLab"), dkb = $("tabDesk");
     const app = document.querySelector(".app");
     if (teach) teach.hidden = true;
     if (sand) sand.hidden = true;
     if (lab) lab.hidden = true;
+    if (desk) desk.hidden = true;
     if (tb) tb.classList.remove("on");
     if (sb) sb.classList.remove("on");
     if (lb) lb.classList.remove("on");
+    if (dkb) dkb.classList.remove("on");
     // 只有动画实验室需要把 .app 锁成 100vh 的 flex 列（舞台钉死视口不滚动）；
-    // 教学训练/自由沙盘是普通长页面，必须能整页滚动，不能带着这个类。
+    // 教学训练/自由沙盘/补货作业台都是普通长页面，必须能整页滚动，不能带着这个类。
     if (app) app.classList.toggle("lab-mode", which === "lab");
     if (which === "lab") {
       if (lab) lab.hidden = false;
@@ -571,6 +574,14 @@
       if (teach) teach.hidden = false;
       if (tb) tb.classList.add("on");
       state.view = "home"; renderHome();
+      return;
+    }
+    // 补货作业台是干活用的工具，不是教学关卡——刻意不加 sandboxUnlocked() 门控，
+    // 不能让作业工具被教学进度锁住。
+    if (which === "desk") {
+      if (desk) desk.hidden = false;
+      if (dkb) dkb.classList.add("on");
+      if (window.DeskCore && window.DeskCore.onShow) window.DeskCore.onShow();
       return;
     }
     // sandbox
@@ -759,11 +770,12 @@
     const actions = header.querySelector(".header-actions");
     const bar = document.createElement("nav");
     bar.className = "tabbar";
-    bar.innerHTML = `<button id="tabTeach" class="on">📚 教学训练</button><button id="tabSandbox">🧪 自由沙盘</button><button id="tabLab">🎬 动画实验室</button>`;
+    bar.innerHTML = `<button id="tabTeach" class="on">📚 教学训练</button><button id="tabSandbox">🧪 自由沙盘</button><button id="tabLab">🎬 动画实验室</button><button id="tabDesk">📋 补货作业台</button>`;
     if (actions) header.insertBefore(bar, actions); else header.appendChild(bar);
     $("tabTeach").addEventListener("click", () => switchTab("teach"));
     $("tabSandbox").addEventListener("click", () => switchTab("sandbox"));
     $("tabLab").addEventListener("click", () => switchTab("lab"));
+    $("tabDesk").addEventListener("click", () => switchTab("desk"));
     // 把原 main 标记为沙盘视图
     const main = document.querySelector("main");
     if (main && !main.id) main.id = "sandboxView";

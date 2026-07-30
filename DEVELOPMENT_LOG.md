@@ -22,6 +22,34 @@
 
 ## 版本记录
 
+### v0.18.0 - 2026-07-31
+
+状态：新增第 4 个 Tab「📋 补货作业台」——模拟器从纯教学工具，迈出"真正辅助决策"的第一步。
+
+**起因**：用户看完沙盘后提出——"这个模型应该提供一个接口，先支持手动输入这些数据……我应该在哪一天开始下单发国内的货？"，并敏锐指出"还有一个在途库存没有考虑到呢"。查证属实：`grep 在途` 显示教学文案里出现 28 次，但 `index.html`/`lab-core.js` 里 0 次——讲了，但从来没建模。自由沙盘的 `simulate()` 供给侧只有"当前库存 + 今天一次性补货"，没有多批次在途 pipeline，也没有把"发运提货"（海外供给决定）和"采购备货"（全流程供给决定）这两个独立决策分开算，答不了用户的真实问题。
+
+**Part 1 — 新建纯计算引擎 [desk-core.js](D:\Desktop\sku-simulator-mvp\desk-core.js)**：`window.DeskCore.planReplenishment(input)`，纯函数不依赖 DOM。核心设计：
+- 输入 schema 按"ERP 事实数据 vs 人的策略"分层——`supply`（数量+ETA，未来对接 API 只需写字段映射适配器）与 `policy`（安全库存天数等人的决定）分开，`planReplenishment()` 本身以后不用改；
+- 用真实日历日期（`asOfDate` + 各批次 `etaDate`），不是教学引擎那种"第N天"；
+- 供给分两层——海外供给（决定发运提货，`shipLeadDays` 不含生产）、全流程供给（决定采购备货，`buyLeadDays` 含生产+备货间隔）；
+- 发运建议量被国内可发库存封顶——这是参考材料"海外缺口 1,375 件，但只能发 144 件"那道标准例题的机制；
+- 在途是多批次 pipeline（各自 qty+ETA），不是单批次。
+
+**Part 2 — 界面**：[index.html](D:\Desktop\sku-simulator-mvp\index.html) 新增 `<section id="deskView">`（输入区：基准日/日销/两层供给/可增删的在途批次行/两段提前期/安全天数；结论区：断货日大字号 + 发运/采购两张决策卡 ok/urgent/missed 三态配色 + canvas 库存时间轴），desk-core.js 补上渲染/交互逻辑，[teach-core.js](D:\Desktop\sku-simulator-mvp\teach-core.js) 加第 4 个 Tab 按钮和 `switchTab("desk")` 分支——**刻意不加 `sandboxUnlocked()` 门控**，作业工具不该被教学进度锁住。录入内容存 `localStorage`（key `sku_desk_input_v1`），刷新不丢。
+
+**Part 3 — 修沙盘真 bug**：`simulate()` 里 `triggerOrderDay = firstStockoutDay − safetyDays`，漏减客观 LeadTime；用默认场景实测（耗尽日118/LT119/安全21）沙盘曾显示"第97天"，正确答案是 −22（22天前就该下单）。改成 `firstStockoutDay − leadTime − safetyDays`，允许为负并在 UI 明确显示"已错过窗口 N 天 · 需加急物流提拉"，不再用 `Math.max(0,…)` 把"已经来不及"抹平成"今天下单还来得及"。
+
+**Part 4 — 浏览器实测中额外挖到并修复的两个真 bug**（自动化测试没覆盖到，是纯手动数字/纯 UI 层面的问题）：
+1. **时区 bug**：`fmtDate()` 原来用 `d.toISOString().slice(0,10)`——`toDate()` 造出来的是本地时区当天 00:00，UTC+8（本机时区）下 `toISOString()` 转 UTC 会把日期拨回前一天（本地 7/30 00:00 → UTC 7/29 16:00），导致断货日、两个最晚下单日全部显示早了一天。改成用本地年月日拼字符串（跟 `toDate()` 的解析方式对称），并在 `verify_lab.js` 加了往返一致性回归断言（`fmtDate(toDate(s)) === s`）。
+2. **canvas 缩放不同步**：容器变窄（比如切到 375px 移动宽度）后，canvas 的内联 `style.width` 还停留在上次渲染时的旧宽度，实测在 375px 下出现 469px 横向溢出——跟 v0.15 时 `lab-core.js` 踩过的是同一类坑（`window.resize` 事件不一定在容器宽度变化时触发）。同样方案修复：用 `ResizeObserver` 监听 `.desk-canvas-box`，容器尺寸真正变化时才重画。
+
+**验证**：
+- `verify_lab.js` 从 106 项扩到 **124 项**全过——新增黄金用例（缺口1375/封顶144/cappedByDomestic）、多批次在途回归、两段LT分离、5 个边界场景、Part3 bug 回归、时区往返回归；
+- 浏览器实测（`javascript_tool` 精确核对数字，非目测）：录入含 2 条海外在途的真实场景，断货日/两个最晚下单日/建议数量跟手算完全一致（`2027-01-12`/166天，发运最晚 `2026-10-23`，采购最晚 `2026-08-25`）；删掉在途批次后断货日正确提前到 `2026-11-13`（106天）；`domesticOnHand=0` 时发运建议量归零但缺口如实报出；刷新页面表单从 localStorage 正确恢复；1920/1290×700/375 三档宽度实测零横向溢出（375px 下靠上面的 ResizeObserver 修复验证通过）；深色主题下卡片/输入框/背景色全部跟随主题变量；教学训练/自由沙盘/动画实验室三个教学 Tab 逐一点过，控制台无报错，完全未受影响。
+- 版本号：`?v=20260727d` → `?v=20260731a`（`teach-data.js`/`teach-core.js`/`lab-core.js`/新增的 `desk-core.js`）。
+
+**遗留**（本轮明确不做，但接口已留好）：不接 API（schema 已设计好未来只需写适配器）；不做多 SKU 批量（`planReplenishment` 是纯函数，以后 `skus.map()` 可直接铺开）；不做分段 Forecast/活动期（`demand` 只有 `dailyForecast`，留了扩展位）。
+
 ### v0.17.0 - 2026-07-27
 
 状态：① 观察步骤加逐项对错解析 + 复盘展示。用户看着"① 观察"截图问："像这一步的选择，有没有准确的答案或者每个选项应该选是不是有解析的？是需要解析的哦，不然的话我们学习的目的是要追求正确的……这样子整个关卡过起来才有收获。"

@@ -1111,6 +1111,48 @@
          这里不用再重复一份视口版本——两套规则并存反而容易在某个宽度下打架，删掉这条。 */
     }
 
+    /* ===== v0.18：补货作业台（第4个Tab，普通文档流页面，不用像labView那样钉死视口高度） ===== */
+    #deskView { max-width: 1400px; margin: 0 auto; padding: 16px; width: 100%; box-sizing: border-box; }
+    #deskView[hidden] { display: none; }
+    .desk-wrap { container-type: inline-size; container-name: desk; }
+    .desk-grid { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 16px; align-items: start; }
+    @container desk (max-width: 760px) { .desk-grid { grid-template-columns: minmax(0, 1fr); } }
+    .desk-input, .desk-output { min-width: 0; }
+    .desk-input h2 { font-size: 16px; margin: 0 0 4px; }
+    .desk-sub { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin: 0 0 14px; }
+    .desk-input h3 { font-size: 12.5px; font-weight: 700; color: var(--accent); letter-spacing: .5px; margin: 16px 0 8px; }
+    .desk-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; min-width: 0; }
+    .desk-field label { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+    .desk-field input { font: inherit; font-size: 13.5px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); min-width: 0; width: 100%; box-sizing: border-box; }
+    .desk-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+    .desk-lt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px 10px; }
+    .desk-lt-grid .desk-field { margin-bottom: 0; }
+    /* 在途批次是可增删的行——数量 + ETA日期 + 删除按钮，三列显式minmax(0,...)，
+       死规矩：不能让日期输入把整行撑宽出现横向滚动条。 */
+    .desk-batch-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px; gap: 6px; align-items: center; margin-bottom: 6px; }
+    .desk-batch-row input { font-size: 13px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); min-width: 0; width: 100%; box-sizing: border-box; }
+    .desk-batch-row button { flex-shrink: 0; border: 1px solid var(--line); background: var(--surface-2); color: var(--red); border-radius: 8px; cursor: pointer; font-size: 15px; line-height: 1; padding: 6px 0; }
+    .desk-batch-row button:hover { border-color: var(--red); }
+    .desk-batch-empty { font-size: 11.5px; color: var(--muted); margin: 0 0 8px; }
+    .desk-input .ghost-btn, .desk-input .primary-btn { width: 100%; margin-top: 4px; }
+    .desk-input .primary-btn { margin-top: 16px; }
+    .desk-hero { text-align: center; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; }
+    .desk-hero-label { font-size: 12.5px; color: var(--muted); }
+    .desk-hero-value { font-size: 26px; font-weight: 800; margin: 4px 0; color: var(--ink); }
+    .desk-hero-sub { font-size: 12.5px; color: var(--muted); }
+    .desk-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .desk-card { background: var(--paper); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: var(--radius); padding: 14px; min-width: 0; }
+    .desk-card.ok { border-left-color: var(--green); }
+    .desk-card.urgent { border-left-color: var(--amber); }
+    .desk-card.missed { border-left-color: var(--red); }
+    .desk-card-title { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+    .desk-card-date { font-size: 19px; font-weight: 800; color: var(--ink); margin-bottom: 8px; }
+    .desk-card-body { font-size: 12.5px; color: var(--ink-soft); line-height: 1.7; }
+    .desk-card-body .tag { margin-bottom: 6px; }
+    .desk-card-body b { color: var(--ink); }
+    .desk-canvas-box { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+    .desk-canvas-box canvas { width: 100%; height: 220px; display: block; border-radius: 8px; background: var(--surface-2); }
+
   </style>
 </head>
 <body>
@@ -1380,7 +1422,7 @@
                 <div id="avgDaily" style="font-weight:720;font-size:18px;margin-top:4px">0 件/天</div>
               </div>
               <div class="number-box" style="background:var(--surface-2)">
-                <label>补货触发日（库存耗尽 − 安全库存）</label>
+                <label>补货触发日（库存耗尽 − LeadTime − 安全库存）</label>
                 <div id="triggerOrderDay" style="font-weight:720;font-size:18px;margin-top:4px">—</div>
               </div>
             </div>
@@ -1550,6 +1592,74 @@
             <div class="lab-dict" id="labDict"></div>
             <p class="lab-hint">搭积木式：图是一步步「长」出来的——每关只加一个新元素，只让你动当前关的滑块。先看演示、再自己拖一遍，观察曲线和读数怎么变，懂了再点「下一步」。支持 Ctrl+Z 撤销 / Ctrl+Shift+Z 重做。</p>
           </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="deskView" hidden>
+      <div class="desk-wrap">
+        <div class="desk-grid">
+          <div class="desk-input">
+            <h2>📋 补货作业台</h2>
+            <p class="desk-sub">录入真实库存/在途数据，直接算出「预计断货日」和「哪天该下单发运/采购」——手动录入是第一个数据来源，日后可以换成 API 自动同步，下面的计算逻辑不用变。</p>
+
+            <div class="desk-field"><label>SKU 名称</label><input type="text" id="deskSku" placeholder="比如 H6099-EU"></div>
+            <div class="desk-field"><label>数据基准日（今天）</label><input type="date" id="deskAsOfDate"></div>
+            <div class="desk-field"><label>预测日销（件/天）</label><input type="number" id="deskDailyForecast" min="0" step="1"></div>
+
+            <h3>供给 · 海外</h3>
+            <div class="desk-field"><label>海外可售库存（件）</label><input type="number" id="deskOverseasOnHand" min="0" step="1"></div>
+            <div class="desk-batches" id="deskOverseasBatches"></div>
+            <button type="button" class="ghost-btn" id="deskAddOverseasBatch">+ 增加一批海外在途</button>
+
+            <h3>供给 · 国内 / 采购</h3>
+            <div class="desk-field"><label>国内可发库存（件）</label><input type="number" id="deskDomesticOnHand" min="0" step="1"></div>
+            <div class="desk-batches" id="deskPurchaseBatches"></div>
+            <button type="button" class="ghost-btn" id="deskAddPurchaseBatch">+ 增加一批采购未入库</button>
+
+            <h3>提前期（天）· 采购备货（含生产）</h3>
+            <div class="desk-lt-grid">
+              <div class="desk-field"><label>备货间隔</label><input type="number" id="deskReorderInterval" min="0" step="1"></div>
+              <div class="desk-field"><label>生产</label><input type="number" id="deskProduction" min="0" step="1"></div>
+              <div class="desk-field"><label>提货</label><input type="number" id="deskPurchasePickup" min="0" step="1"></div>
+              <div class="desk-field"><label>运输</label><input type="number" id="deskPurchaseShipping" min="0" step="1"></div>
+              <div class="desk-field"><label>上架</label><input type="number" id="deskPurchaseListing" min="0" step="1"></div>
+            </div>
+
+            <h3>提前期（天）· 发运提货（不含生产）</h3>
+            <div class="desk-lt-grid">
+              <div class="desk-field"><label>提货</label><input type="number" id="deskShipPickup" min="0" step="1"></div>
+              <div class="desk-field"><label>运输</label><input type="number" id="deskShipShipping" min="0" step="1"></div>
+              <div class="desk-field"><label>上架</label><input type="number" id="deskShipListing" min="0" step="1"></div>
+            </div>
+
+            <div class="desk-field"><label>安全库存天数</label><input type="number" id="deskSafetyDays" min="0" step="1"></div>
+
+            <button class="primary-btn" id="deskRunBtn">▶ 计算</button>
+          </div>
+
+          <div class="desk-output">
+            <div class="desk-hero" id="deskHero">
+              <div class="desk-hero-label">预计断货日</div>
+              <div class="desk-hero-value" id="deskStockoutDate">—</div>
+              <div class="desk-hero-sub" id="deskStockoutSub">填好左边的数据，点「计算」看结果</div>
+            </div>
+            <div class="desk-cards">
+              <div class="desk-card" id="deskShippingCard">
+                <div class="desk-card-title">🚚 发运提货（海外供给）</div>
+                <div class="desk-card-date" id="deskShippingDate">—</div>
+                <div class="desk-card-body" id="deskShippingBody"></div>
+              </div>
+              <div class="desk-card" id="deskPurchaseCard">
+                <div class="desk-card-title">🏭 采购备货（全流程供给）</div>
+                <div class="desk-card-date" id="deskPurchaseDate">—</div>
+                <div class="desk-card-body" id="deskPurchaseBody"></div>
+              </div>
+            </div>
+            <div class="desk-canvas-box">
+              <canvas id="deskTimelineCanvas"></canvas>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1744,8 +1854,14 @@
       const orderQty = Math.max(0, coverForecast - supplyFull);
       // 红绿线：需求（覆盖窗口累计预测）> 供给（全流程供给）→ 预测过激/备货不足
       const redGreen = coverForecast > supplyFull ? "red" : "green";
-      // 补货触发日（智能发货逻辑）：第 x 天断货 → x − 安全库存天 出现补货需求
-      const triggerOrderDay = firstStockoutDay !== null ? Math.max(0, firstStockoutDay - input.safetyDays) : null;
+      // 补货触发日 = 预计耗尽日 − 客观LeadTime − 安全库存天数（跟教学第5章口径一致）。
+      // v0.18 修复：旧版漏减了 leadTime，只算了"耗尽日 − 安全库存"，会把"早就该下单"的
+      // 场景算成一个看起来还有很久的正数（比如耗尽日118、LT119、安全库存21，旧版显示
+      // "第97天"，正确答案其实是 −22，即22天前就该下单了）——当教具影响有限，但拿来指导
+      // 真实补货会让人误以为还有大把时间可以等。这里不再用 Math.max(0,...) 把负数抹平成
+      // 0：抹平会把"已经来不及"伪装成"今天就该下单"，两者对应的动作完全不同（前者要
+      // 加急物流提拉，后者只是正常下单），必须让负数如实显示出来。
+      const triggerOrderDay = firstStockoutDay !== null ? firstStockoutDay - leadTime - input.safetyDays : null;
 
       let level = "good";
       let title = "可以继续售卖";
@@ -1951,7 +2067,19 @@
         $("rgLineText").textContent = `覆盖窗口累计预测 ${formatNumber(result.coverForecast)} 件，未超过全流程供给 ${formatNumber(result.supplyFull)} 件。供给可接住预测，当天备货量 ${formatNumber(result.orderQty)} 件。`;
       }
       $("avgDaily").textContent = `${formatNumber(result.avgDaily, 1)} 件/天`;
-      $("triggerOrderDay").textContent = result.triggerOrderDay !== null ? `第 ${result.triggerOrderDay} 天` : "当前无断货";
+      // v0.18：负数不再抹平成 0——负数本身就是"已经来不及，需要加急物流提拉"这个明确
+      // 信号，跟"还有 N 天可以正常下单"是完全不同的两种动作，不能用同一种文案盖过去。
+      const triggerEl = $("triggerOrderDay");
+      if (result.triggerOrderDay === null) {
+        triggerEl.textContent = "当前无断货";
+        triggerEl.style.color = "";
+      } else if (result.triggerOrderDay < 0) {
+        triggerEl.textContent = `已错过窗口 ${Math.abs(result.triggerOrderDay)} 天 · 需加急物流提拉`;
+        triggerEl.style.color = "var(--red, #b83c34)";
+      } else {
+        triggerEl.textContent = `第 ${result.triggerOrderDay} 天`;
+        triggerEl.style.color = "";
+      }
     }
 
     // ===== v0.5 enrichment：从现有模拟结果派生 GMV 拆解 / 成本结构 / ROI / 综合经营分 =====
@@ -2172,8 +2300,9 @@
   });
 })();
 </script>
-<script src="teach-data.js?v=20260727d"></script>
-<script src="teach-core.js?v=20260727d"></script>
-<script src="lab-core.js?v=20260727d"></script>
+<script src="teach-data.js?v=20260731a"></script>
+<script src="teach-core.js?v=20260731a"></script>
+<script src="lab-core.js?v=20260731a"></script>
+<script src="desk-core.js?v=20260731a"></script>
 </body>
 </html>
