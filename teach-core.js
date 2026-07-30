@@ -619,6 +619,8 @@
     // 只有动画实验室需要把 .app 锁成 100vh 的 flex 列（舞台钉死视口不滚动）；
     // 教学训练/自由沙盘/补货作业台都是普通长页面，必须能整页滚动，不能带着这个类。
     if (app) app.classList.toggle("lab-mode", which === "lab");
+    // v0.20：lab / desk 视图都有自己的下一步/计算按钮，bottom-fixed 的 .mobile-run 反而会挡内容
+    if (app) app.classList.toggle("hide-mobile-run", which === "lab" || which === "desk");
     if (which === "lab") {
       if (lab) lab.hidden = false;
       if (lb) lb.classList.add("on");

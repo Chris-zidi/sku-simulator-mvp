@@ -1087,12 +1087,39 @@
     .lab-new { display: inline-block; font-size: 10px; background: var(--accent); color: #fff; border-radius: 6px; padding: 1px 6px; margin-left: 4px; vertical-align: middle; }
     .ghost-btn { font: inherit; font-size: 14px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
     .ghost-btn:active { transform: translateY(1px); }
+    /* ===== v0.20 M 端额外修复 =====
+     * ① .app.lab-mode 已在 1100px 断点里放开（见上方），但 .mobile-run 是 fixed 全局按钮，在 lab
+     *    视图也会覆盖在最下面挡住 controls/buttons。这里让 mobile-run 只在「教学/沙盘」视图显示，
+     *    lab / desk 视图自动隐藏 —— 它们自己有下一步/计算按钮。 */
+    .app.lab-mode .mobile-run, .app.desk-mode .mobile-run, .app.hide-mobile-run .mobile-run { display: none; }
+    /* ② ≤820px 视口（iPhone/小屏）：tab bar 横向 4 个按钮挤不下，加横向滚动避免溢出变形 */
+    @media (max-width: 820px) {
+      .app header { padding: 8px 12px; }
+      .app header .header-inner { gap: 8px; }
+      .app header .brand strong { font-size: 14px; }
+      .app header .brand span { display: none; } /* 副标题"Forecast · Lead Time · Safety Stock"藏起来，省位置 */
+      .app header .header-actions { gap: 6px; }
+      .app header .header-actions .secondary-btn { padding: 0 10px; font-size: 12px; }
+      .app header .header-actions .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+      .tabbar { gap: 4px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+      .tabbar button { flex-shrink: 0; font-size: 12px; padding: 6px 10px; }
+    }
+    /* ③ ≤560px 视口（更小的手机）：canvas 维持 320px 最小高度可读，但避免再被压到 <280 */
+    @media (max-width: 560px) {
+      .lab-canvas-box { min-height: 280px; }
+    }
     .lab-demo-badge { position: absolute; top: 8px; left: 8px; background: rgba(120,90,255,.9); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; pointer-events: none; }
     /* 断点从 999px 提到 1100px：三栏地板之和（360+220+260+2×14 gap=868）加上 #labView 左右
        padding（32px）逼近 900px，留的余量太小——浏览器缩放到 110%~125% 时视口有效宽度正好卡
        在这段「三栏但地板已经顶到头」的尴尬区间，各栏会硬挤变形。提前在 1100px 切换成单列堆叠，
        缩放到常见的 110%/125%/150% 时都能落在某一侧，不会卡在中间难看的过渡态。 */
     @media (max-width: 1100px) {
+      /* v0.20 M 端修复根因：.app.lab-mode 在所有视口都硬绑了 100vh + overflow:hidden —— PC 端 OK，
+         但 ≤1100px 切换到单列堆叠后，#labView 内部三块（canvas + readout + buttons）自然高度总和
+         远超 100vh，父级 .app 一刀裁掉，滑块和下一步按钮全在屏外根本够不到。这里把 lab-mode 也
+         释放：lab 视图走自然文档流 + 页面级滚动，不再依赖"屏内自洽"的硬约束。教学/沙盘视图不受
+         影响（那些本来就是普通文档流）。 */
+      .app.lab-mode { height: auto; min-height: 100vh; overflow: visible; }
       #labView { height: auto; overflow: visible; padding: 0 12px 40px; }
       .lab-grid { grid-template-columns: 1fr; height: auto; }
       /* 桌面端 order 是"参数 → 图表 → 文案"（图表居中当主角）；堆叠成单列时改回"图表最先看到，
