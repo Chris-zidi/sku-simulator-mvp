@@ -159,6 +159,109 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
   }
 
+  // v0.19：真实感预设场景——用户反馈"一大堆空的参数让我填，都不知道要从哪里入口，
+  // 都不像真实情况"。点一个按钮直接填满一整套有故事背景的数据，参照自由沙盘那 5 个
+  // 预设的做法，不用面对空表单。
+  const PRESETS = [
+    {
+      key: "eu_peak", label: "🇪🇺 EU 旺季备货",
+      story: "旺季将近，海外仓库存充足、也有一批在途补给在路上，按正常节奏走就行。",
+      build: (asOf) => ({
+        sku: "EU-旺季款", dailyForecast: 42,
+        overseasOnHand: 1800, overseasBatches: [{ qty: 2200, etaDate: fmtDate(addDays(asOf, 35)) }],
+        domesticOnHand: 600, purchaseBatches: [{ qty: 3000, etaDate: fmtDate(addDays(asOf, 70)) }],
+        reorderInterval: 14, production: 30, purchasePickup: 7, purchaseShipping: 45, purchaseListing: 3,
+        shipPickup: 5, shipShipping: 25, shipListing: 2, safetyDays: 14
+      })
+    },
+    {
+      key: "new_launch", label: "🆕 新品首单",
+      story: "刚上架的新品，海外/国内都还没有库存，第一批货全靠预估下单。",
+      build: () => ({
+        sku: "新品首单-SKU", dailyForecast: 18,
+        overseasOnHand: 0, overseasBatches: [], domesticOnHand: 0, purchaseBatches: [],
+        reorderInterval: 7, production: 45, purchasePickup: 7, purchaseShipping: 53, purchaseListing: 5,
+        shipPickup: 7, shipShipping: 53, shipListing: 5, safetyDays: 21
+      })
+    },
+    {
+      key: "rescue", label: "🚨 断货抢救",
+      story: "海外库存快见底、国内可发也不多，正常流程很可能已经来不及了。",
+      build: (asOf) => ({
+        sku: "紧急抢救-SKU", dailyForecast: 30,
+        overseasOnHand: 200, overseasBatches: [],
+        domesticOnHand: 50, purchaseBatches: [{ qty: 3000, etaDate: fmtDate(addDays(asOf, 120)) }],
+        reorderInterval: 14, production: 45, purchasePickup: 7, purchaseShipping: 53, purchaseListing: 3,
+        shipPickup: 7, shipShipping: 53, shipListing: 3, safetyDays: 21
+      })
+    },
+    {
+      key: "clearance", label: "📦 清库尾款",
+      story: "SKU 快下市，库存压得多，日销也放缓，短期内完全不需要补货。",
+      build: () => ({
+        sku: "清库尾款-SKU", dailyForecast: 8,
+        overseasOnHand: 4000, overseasBatches: [], domesticOnHand: 1500, purchaseBatches: [],
+        reorderInterval: 14, production: 45, purchasePickup: 7, purchaseShipping: 53, purchaseListing: 3,
+        shipPickup: 7, shipShipping: 53, shipListing: 3, safetyDays: 7
+      })
+    }
+  ];
+
+  function renderPresetButtons() {
+    const box = $("deskPresets");
+    if (!box) return;
+    box.innerHTML = PRESETS.map((p) =>
+      `<button type="button" class="desk-preset-btn" data-key="${p.key}" title="${p.story}">${p.label}</button>`
+    ).join("");
+    box.querySelectorAll(".desk-preset-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const preset = PRESETS.find((p) => p.key === btn.dataset.key);
+        if (!preset) return;
+        const asOf = new Date();
+        const state = Object.assign(defaultState(), { asOfDate: fmtDate(asOf) }, preset.build(asOf));
+        fillForm(state);
+        saveState(state);
+        runAndRender();
+      });
+    });
+  }
+
+  // v0.19：每个字段挂一个 ⓘ 提示——点开告诉你这个字段是什么、去哪儿要这个数据，
+  // 解决"一堆空参数不知道从哪里入口"的问题。跟教学章节呼应的字段顺带提一句该看哪一章。
+  const FIELD_HINTS = {
+    dailyForecast: "预测未来平均每天能卖多少件——参考教学训练「Forecast到底是什么」一章，从ERP过去日销数据加权得到，不是拍脑袋定的。",
+    overseasOnHand: "海外仓/FBA现在可售的库存件数——找物流或平台后台的库存报表要。",
+    domesticOnHand: "国内仓现在可以马上发运的库存件数——这个数字会封顶「这次最多能发多少」，找国内仓库存系统要。",
+    reorderInterval: "你多久下一次采购单的节奏（不是运输时间）——参考教学训练「LeadTime、安全库存与物流成本」一章，这是你自己定的备货节奏，不用找谁要。",
+    production: "工厂生产/备货所需天数——找采购/供应商要。",
+    purchasePickup: "采购这批货从工厂提货所需天数——找物流要。",
+    purchaseShipping: "采购这批货运输在途天数（海运/空运）——找物流要。",
+    purchaseListing: "货到仓库后上架可售所需天数——找仓库/运营要。",
+    shipPickup: "从海外仓提货所需天数（不含生产）——找海外仓/物流要。",
+    shipShipping: "从海外仓运到国内仓的运输天数——找物流要。",
+    shipListing: "国内仓货物上架可售所需天数——找仓库要。",
+    safetyDays: "你愿意为预测偏差和物流延误多留几天缓冲——参考教学训练「LeadTime、安全库存与物流成本」一章，这是你自己的风险策略，不是找谁要的客观数据。"
+  };
+
+  function injectFieldHints() {
+    Object.keys(FIELD_HINTS).forEach((key) => {
+      const input = $(FIELD_IDS[key]);
+      if (!input) return;
+      const field = input.closest(".desk-field");
+      if (!field || field.querySelector(".desk-hint-btn")) return;
+      const label = field.querySelector("label");
+      if (!label) return;
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "desk-hint-btn"; btn.textContent = "ⓘ";
+      btn.setAttribute("aria-label", "这个字段是什么、去哪儿要");
+      const pop = document.createElement("div");
+      pop.className = "desk-hint-pop"; pop.hidden = true; pop.textContent = FIELD_HINTS[key];
+      btn.addEventListener("click", () => { pop.hidden = !pop.hidden; });
+      label.appendChild(btn);
+      field.appendChild(pop);
+    });
+  }
+
   function $(id) { return document.getElementById(id); }
 
   function batchRowHtml(qty, etaDate) {
@@ -371,6 +474,8 @@
   function initDeskOnce() {
     deskInitialized = true;
     fillForm(loadState());
+    renderPresetButtons();
+    injectFieldHints();
     bindBatchContainerEvents("deskOverseasBatches");
     bindBatchContainerEvents("deskPurchaseBatches");
     const addOverseas = $("deskAddOverseasBatch");
@@ -397,9 +502,22 @@
     if (lastResult) drawTimeline(lastResult);
   }
 
+  // v0.19：教学章节完成页「▶ 用这组数据去作业台算一遍」按钮用的公开接口——跟 onShow() 一样
+  // 是明确的生产用 API（不是 _debug）。teach-core.js 调用方式：先 loadExternalState(state)
+  // 把数据填好、算好，再 switchTab("desk") 让作业台可见——switchTab 会把 desk.hidden 设成
+  // false 之后再调 onShow()，那时 canvas 才有真实宽度，画布不会用隐藏状态下量到的 0 宽度。
+  function loadExternalState(partialState) {
+    const state = Object.assign(defaultState(), partialState);
+    if (!deskInitialized) { initDeskOnce(); }
+    fillForm(state);
+    saveState(state);
+    runAndRender();
+  }
+
   window.DeskCore = {
     planReplenishment,
     onShow,
+    loadExternalState,
     // 仅供 verify_lab.js 等自动化测试使用：暴露内部纯函数，不给 UI 用
     _debug: { planReplenishment, projectTimeline, toDate, addDays, fmtDate }
   };

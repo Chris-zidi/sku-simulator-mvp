@@ -195,6 +195,13 @@
     const cardsHTML = (L.cards || []).map((c) =>
       `<article class="ls-card ${c.tone || ""}"><h3>${c.h}</h3><p>${c.p}</p>${c.formula ? `<div class="ls-formula">${c.formula}</div>` : ""}</article>`
     ).join("");
+    // v0.19：讲解阶段的"活插图"——只留空容器，真正的 canvas/滑块/公式行由 renderChapter()
+    // 在 innerHTML 落定之后调用 MiniChart.renderFigure() 挂载（渲染函数本身只拼字符串，
+    // 没有实体 DOM 元素可以传给 MiniChart，必须分两步）。支持两个挂载点——卡片后一个
+    // （先讲定义，比如管道图），标准例题后一个（再看 aha，比如对比双图），只在数据里
+    // 写了对应字段时才出现，不用两个都配。
+    const figureHTML = L.figure ? `<div class="ls-figure" id="lsFigure"></div>` : "";
+    const figure2HTML = L.figure2 ? `<div class="ls-figure" id="lsFigure2"></div>` : "";
     const workedHTML = L.worked ? `
       <div class="ls-section">
         <div class="ls-label">标准例题 · 有固定答案</div>
@@ -216,10 +223,31 @@
       <div class="ls-block">
         ${L.scene ? `<p class="ls-scene">${L.scene}</p>` : ""}
         ${cardsHTML ? `<div class="ls-cards">${cardsHTML}</div>` : ""}
+        ${figureHTML}
         ${workedHTML}
+        ${figure2HTML}
         ${contrastHTML}
         ${sayHTML}
       </div>`;
+  }
+
+  // v0.19：挂载/卸载讲解阶段的活插图——每次进入/离开 step=-1 都要先卸载上一次的
+  // ResizeObserver+事件监听，否则反复打开同一章或切章会累积监听器（内存泄漏）。
+  // 两个插槽（figure 挂在卡片后、figure2 挂在标准例题后）各自独立销毁。
+  let figureDestroy = null, figure2Destroy = null;
+  function mountLessonFigure(ch) {
+    if (figureDestroy) { figureDestroy(); figureDestroy = null; }
+    if (figure2Destroy) { figure2Destroy(); figure2Destroy = null; }
+    const L = ch.lesson;
+    if (!L || !window.MiniChart) return;
+    if (L.figure) {
+      const el = $("lsFigure");
+      if (el) figureDestroy = window.MiniChart.renderFigure(el, L.figure);
+    }
+    if (L.figure2) {
+      const el2 = $("lsFigure2");
+      if (el2) figure2Destroy = window.MiniChart.renderFigure(el2, L.figure2);
+    }
   }
 
   /* ============================================================
@@ -260,8 +288,13 @@
         </div>
       `;
       bindChapterEvents(ch);
+      mountLessonFigure(ch);
       return;
     }
+    // 离开先学阶段（进入六步循环）时，讲解阶段挂的活插图要卸载——它的 DOM 已经被
+    // 上面这次 innerHTML 重写整段替换掉了，残留的 ResizeObserver 找不到宿主元素。
+    if (figureDestroy) { figureDestroy(); figureDestroy = null; }
+    if (figure2Destroy) { figure2Destroy(); figure2Destroy = null; }
 
     const obsTable = ch.observe.labels.map((lb, i) =>
       `<div class="obs-row"><span>${lb}</span><b>${ch.observe.values[i]}</b></div>`).join("");
@@ -404,6 +437,7 @@
             ${scoreCell("信心校准", sc.conf)}
           </div>
           <div class="saved-rule">你的规则：<b>${d.rule}</b></div>
+          ${ch.deskPreset ? `<button class="primary-btn desk-jump-btn" data-act="go-desk">▶ 用这组数据去作业台算一遍</button>` : ""}
           <div class="done-actions">
             <button class="secondary-btn" data-act="home">返回首页</button>
             <button class="primary-btn" data-act="next-ch">${nextChapter(ch) ? "下一章 →" : "回首页"}</button>
@@ -513,8 +547,29 @@
           const nx = nextChapter(ch);
           if (nx) openChapter(nx.id); else { state.view = "home"; renderHome(); }
         }
+        else if (act === "go-desk") { applyDeskPresetFromChapter(ch); }
       });
     });
+  }
+
+  // v0.19：学完立刻用上——把章节自带的 deskPreset（相对天数）换算成真实日历日期，
+  // 交给 DeskCore.loadExternalState() 填好表单+算一遍，再切到作业台 Tab。
+  // 不直接碰 window.DeskCore._debug——那是明确标注"仅供测试"的接口，这里走
+  // loadExternalState() 这个和 onShow() 同级的正式公开 API。
+  function applyDeskPresetFromChapter(ch) {
+    const dp = ch.deskPreset;
+    if (!dp || !window.DeskCore || !window.DeskCore.loadExternalState) return;
+    const today = new Date();
+    function addDaysLocal(n) { const d = new Date(today); d.setDate(d.getDate() + n); return d; }
+    function fmtLocal(dt) { return dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0"); }
+    const state2 = Object.assign({}, dp, {
+      sku: dp.sku || ch.title,
+      asOfDate: fmtLocal(today),
+      overseasBatches: (dp.overseasBatches || []).map((b) => ({ qty: b.qty, etaDate: fmtLocal(addDaysLocal(b.day)) })),
+      purchaseBatches: (dp.purchaseBatches || []).map((b) => ({ qty: b.qty, etaDate: fmtLocal(addDaysLocal(b.day)) }))
+    });
+    window.DeskCore.loadExternalState(state2);
+    switchTab("desk");
   }
 
   function saveEntry(ch) {
@@ -589,6 +644,9 @@
     if (sand) sand.hidden = false;
     if (sb) sb.classList.add("on");
   }
+  // v0.19：导出到 window——章节完成页「用这组数据去作业台算一遍」按钮需要从外部触发切
+  // Tab（原来 switchTab 只在这个 IIFE 内部被自己的按钮监听器调用，从没被别处引用过）。
+  window.switchTab = switchTab;
 
   function renderSandboxLock() {
     const sand = $("sandboxView");
@@ -756,7 +814,29 @@
     .obs-review-row.wrong .obs-review-tag{color:var(--red);}
     .obs-review-row.skip{opacity:.6;}
     .obs-review-row.skip .obs-review-icon{background:var(--panel);color:var(--muted);border:1px solid var(--line);}
-    .obs-review-row.skip .obs-review-tag{color:var(--muted);}`;
+    .obs-review-row.skip .obs-review-tag{color:var(--muted);}
+    /* v0.19：讲解阶段的"活插图"（mini-chart.js 渲染）——死规矩同全项目：不许横向滚动，
+       grid/flex 子项 min-width:0，canvas 靠 ResizeObserver（mini-chart.js 内部）兜住容器变窄。 */
+    .ls-figure{margin:14px 0;min-width:0;}
+    .mc-figure{min-width:0;}
+    .mc-canvas-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;min-width:0;}
+    .mc-canvas-box canvas{width:100%;display:block;}
+    .mc-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 12px;margin-top:10px;min-width:0;}
+    .mc-slider-field{min-width:0;}
+    .mc-slider-top{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-soft);margin-bottom:2px;gap:6px;min-width:0;}
+    .mc-slider-val{font-weight:700;color:var(--accent);flex-shrink:0;}
+    .mc-slider-field input[type=range]{width:100%;accent-color:var(--accent);}
+    .mc-toggle{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;min-width:0;}
+    .mc-formula{margin-top:10px;padding:10px 12px;background:var(--panel);border-radius:10px;font-size:13.5px;line-height:1.7;min-width:0;word-break:break-word;}
+    .mc-term{font-weight:700;}
+    .mc-result{color:var(--accent);}
+    .mc-compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;min-width:0;}
+    .mc-compare-col{min-width:0;}
+    .mc-compare-label{font-size:12.5px;font-weight:700;margin-bottom:4px;}
+    .mc-compare-label.mc-bad{color:var(--red);}
+    .mc-compare-label.mc-good{color:var(--green);}
+    .mc-compare-note{font-size:12px;color:var(--ink-soft);margin-top:4px;text-align:center;}
+    .mc-pipeline-box{padding:4px;}`;
     const style = document.createElement("style");
     style.id = "teachStyle";
     style.textContent = css;

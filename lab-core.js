@@ -64,6 +64,11 @@
       ] },
     // v0.14 新增：下单日——玩家自己拖，直接决定早订压仓/晚订断货，取代原先的自动触发公式。
     orderDay:   { label: "下单日",       min: 0,    max: 170,  step: 1,    unit: "天",   note: "你哪天点下单按钮——这是你自己的决策" },
+    // v0.19 新增：在途库存——已经下过的一批单，正在路上，ETA 已经定死，今天改不了它什么时候到，
+    // 但必须算进「接下来还有多少供给」里。跟 orderDay（你现在能决定）刻意分开成两个滑块，
+    // 就是要让「已经定死 vs 现在能决定」这个对比在参数栏里也看得见。
+    transitQty: { label: "在途数量",     min: 0,    max: 6000, step: 50,   unit: "件",   note: "已经在路上、你现在改不了的一批货" },
+    transitEta: { label: "在途到货日",   min: 0,    max: 170,  step: 1,    unit: "天",   note: "这批货第几天到——已经定好了，不是你今天能决定的" },
     promo:      { label: "促销系数",     min: 1,    max: 4,    step: 0.1,  unit: "×",    note: "促销期销量放大倍数" },
     promoDay:   { label: "促销开始日",   min: 0,    max: 170,  step: 1,    unit: "天",   note: "从第几天起进入促销" }
   };
@@ -153,18 +158,44 @@
       ]
     },
     {
+      // v0.19 新增：在途库存——插在「补货」和「安全库存」之间，是本轮要修的核心教学缺口
+      // （用户原话："还有一个在途库存没有考虑到呢"）。放这个位置有两个理由：
+      // ① 上一关已经有「你自己下的单」产生的一个到货点，这一关只需再加一批「早就下好、
+      //   已经在路上」的货，两个到货点天然形成锯齿曲线，不用一次性塞 3~4 个新滑块；
+      // ② 给下一关「安全库存」做铺垫——先看懂"谷底"这个概念，再讲"留几天安全垫让谷底
+      //   离 0 更远"才顺理成章。
+      logic: "在途",
+      title: "在途库存：已经在路上、你改不了的那批货",
+      element: "intransit",
+      newParam: ["transitQty", "transitEta"],
+      newLabel: "📦 在途库存",
+      intro:
+        "你已经学会自己拖【下单日】决定「什么时候下自己的单」。但现实里，供给不只这一单——你很可能之前已经下过一批货，正在海上/路上，<b>ETA 已经定死，今天改不了它什么时候到</b>，但必须把它算进「未来还有多少货」里。<br>" +
+        "<b>核心变化</b>：你要判断的不再是「现在库存多少」这一个数，而是「接下来这条曲线会跌到的最低点（谷底）是多少」——从看一个数字，变成看一整条曲线的最小值。<b>安全 ⟺ 谷底 > 0</b>。<br>" +
+        "<b>忘了算在途最常见的错</b>：只看「现在」库存不算多，慌忙加急下单——结果在途的货和新下的单前后脚到，两批货叠在一起，白白压了一堆仓。<br>" +
+        "<b>📦 蓝色台阶</b> = 在途到货那天曲线被抬高一截，颜色跟你自己下的单（🟢 绿箭头）刻意区分开——一个是「已经定死、你改不了」，一个是「你现在还能决定」。",
+      instruct: "先看默认这组数据：🔻 谷底虚线是正的（安全）。现在把【在途数量】拖到 0，看谷底会不会跌破 0——这条线告诉你「在途」这批货到底有多重要。",
+      observe: "观察 📦 蓝色台阶（在途到货）和 🔻 谷底虚线：谷底 > 0 = 安全；谷底 ≤ 0（虚线变红）= 中间某天一定断货，即使你自己下的那一单最终能接上。",
+      baseline: { inventory: 1200, demand: 30, forecast: 30, leadTime: 45, orderDay: 70, replenish: 3500, safetyDays: 0, promo: 1, promoDay: 60, transitQty: 2500, transitEta: 35 },
+      demoTarget: { transitQty: 0 },
+      dict: [
+        { k: "📦 在途库存", v: "已经下单在路上、你现在改不了的一批货——必须算进供给，不是可有可无的备注。" },
+        { k: "🔻 谷底", v: "曲线接下来会跌到的最低点。安全看的是这个数会不会跌破 0，不是「现在」库存多少。" }
+      ]
+    },
+    {
       logic: "安全",
       title: "安全库存：一条参考线，不是自动开关",
       element: "safety",
       newParam: ["safetyDays"],
       newLabel: "🟠 参考建议线",
       intro:
-        "上一关你已经学会自己拖【下单日】了。这一关加一条「参考建议线」帮你判断——留几天「安全垫」，算出一个建议下单日，<b>只是参考，不会替你下单</b>，你上一关拖的【下单日】滑块还是完全由你自己控制。<br>" +
-        "参考日 = 库存覆盖天数 − 缓冲天数 − 提前期。缓冲天数越大，参考线越靠左（建议你更早下单）。<br>" +
+        "上一关你学会了看「谷底」——曲线接下来会跌到的最低点。这一关加一条「参考建议线」帮你在下单前先预留一点缓冲：留几天「安全垫」，算出一个建议下单日，<b>只是参考，不会替你下单</b>，你自己拖的【下单日】滑块还是完全由你自己控制。<br>" +
+        "参考日 = 库存覆盖天数 − 缓冲天数 − 提前期。缓冲天数越大，参考线越靠左（建议你更早下单）——本质上就是让上一关那条「谷底」离 0 更远一点。<br>" +
         "对比你自己选的下单日和这条参考线：晚于参考线 = 更容易断货；早于参考线 = 更容易压仓。",
       instruct: "切换几档【安全库存参考】（0/7/14/21 天），观察 📍 参考建议虚线左右移动；再回头看你自己在上一关定的【下单日】，比参考线早还是晚。",
       observe: "观察 📍 参考建议虚线的位置随缓冲天数变化；观察读数「参考建议日」，看你自己选的下单日和它差几天。",
-      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 45, orderDay: 55, replenish: 4000, safetyDays: 7, promo: 1, promoDay: 60 },
+      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 45, orderDay: 55, replenish: 4000, safetyDays: 7, promo: 1, promoDay: 60, transitQty: 0, transitEta: 0 },
       demoTarget: { safetyDays: 21 },
       dict: [
         { k: "📍 参考建议线", v: "按缓冲天数算出的建议下单点，只做参考，不会自动帮你下单。" },
@@ -186,7 +217,7 @@
         "<small>（这一关物流方式默认选了「空运·20天」——提前期太长的话，180 天的时间轴里连一整个「下单→到货→卖完」的周期都放不下，看不出预测误差的效果；想看长提前期的压力，可以自己切换物流方式。）</small>",
       instruct: "拖【预测日均销量】：往下拖到 20（比真实 48 低很多）看缺货带怎么变大、少赚多少钱；再拖到 90（比真实高很多）看期末剩下一堆货、占用多少资金。拖回 48（等于真实）两种代价都会趋近于 0。",
       observe: "观察读数「少赚金额」「压仓占用」：这两个数不是装饰——预测的每一分误差，最后都变成了真金白银的损失。补货量这一关起不再手动拖，系统按你的预测自动算「该补多少」，算错了 lostSales/期末库存会立刻告诉你。",
-      baseline: { inventory: 5000, demand: 48, forecast: 48, leadTime: 20, orderDay: 84, replenish: 4000, safetyDays: 14, promo: 1, promoDay: 60 },
+      baseline: { inventory: 5000, demand: 48, forecast: 48, leadTime: 20, orderDay: 84, replenish: 4000, safetyDays: 14, promo: 1, promoDay: 60, transitQty: 0, transitEta: 0 },
       demoTarget: { forecast: 20 },
       dict: [
         { k: "🟣 紫虚线", v: "「计划」曲线 = 按你预测的日销算出的库存走势。虚线代表还没发生。" },
@@ -208,7 +239,7 @@
         "光加广告不补货 = 尖峰压垮库存，加速断货、加速少赚。",
       instruct: "拖【促销系数】从 1.4 拉到 2.5：🟡 尖峰更陡，库存断崖式下跌；再调【促销开始日】看 ▏琥珀竖虚线（= 斜率切换点）左右移动。",
       observe: "观察 🟡 尖峰：促销开始日之后 📉 绿线突然变陡（斜率 × 促销系数）。观察 ▏琥珀竖虚线：它标出「从这天起线变陡」。",
-      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, orderDay: 20, replenish: 4000, safetyDays: 21, promo: 1.4, promoDay: 60 },
+      baseline: { inventory: 4000, demand: 40, forecast: 40, leadTime: 140, orderDay: 20, replenish: 4000, safetyDays: 21, promo: 1.4, promoDay: 60, transitQty: 0, transitEta: 0 },
       demoTarget: { promo: 2.5 },
       dict: [
         { k: "🟡 尖峰", v: "促销期斜率临时放大 = 线突然变陡。日销 × 促销系数。" },
@@ -304,7 +335,12 @@
   // v0.14 核心修复：「哪天下单」不再是公式自动触发（旧版 cover<=safetyDays+leadTime），
   //   改成玩家自己拖的 p.orderDay 直接决定——早订会压仓、晚订会断货，后果由玩家的
   //   选择直接负责，不再是黑盒规则替玩家做决定。
-  function simulate(p, hasLead, hasPromo, hasForecastDriven, injectReplenish) {
+  // v0.19：hasTransit 新增——「在途库存」关起，除了 orderDay/leadTime 算出的那一个到货点，
+  // 再加一批已经提前下好单、ETA 已定死的在途货（p.transitEta/p.transitQty）。两个到货点
+  // 各自独立注入，同一天撞上就相加——这是多批次到货 pipeline 的最简版本（真实作业里到货点
+  // 可以有任意多批，这里先够教「谷底」这个概念）。hasTransit=false 时这段代码完全不执行，
+  // 前 4 关（坐标系/日销/售罄/补货）行为逐字节不变。
+  function simulate(p, hasLead, hasPromo, hasForecastDriven, injectReplenish, hasTransit) {
     const inv = new Array(HORIZON + 1).fill(0);
     inv[0] = p.inventory;
     let lostSales = 0, stockoutDays = 0, sellOutDay = -1, soldQty = 0;
@@ -324,7 +360,9 @@
       const promoOn = hasPromo && t >= p.promoDay;
       const realDemandToday = p.demand * (promoOn ? p.promo : 1);
       const replenishQty = hasForecastDriven ? suggestedQty : p.replenish;
-      const available = inv[t - 1] + ((injectReplenish && arrivalDay === t && replenishQty > 0) ? replenishQty : 0);
+      let arrivalQty = (injectReplenish && arrivalDay === t && replenishQty > 0) ? replenishQty : 0;
+      if (hasTransit && p.transitEta === t && p.transitQty > 0) arrivalQty += p.transitQty;
+      const available = inv[t - 1] + arrivalQty;
       const sold = Math.min(realDemandToday, available); // 结果侧：真实卖出多少，永远受真实需求和真实库存约束
       soldQty += sold;
       const raw = available - realDemandToday;
@@ -332,7 +370,12 @@
       inv[t] = Math.max(0, raw);
       if (sellOutDay < 0 && inv[t] <= 0) sellOutDay = t;
     }
-    return { inv, ordered: hasLead, orderDay, arrivalDay, lostSales, stockoutDays, sellOutDay, suggestedQty, soldQty };
+    // v0.19：谷底——曲线全程（含期初库存）的最低点/最低点那天。这是「在途库存」关要教的
+    // 核心数学洞见：安全与否不是看"现在有多少"这一个数，是看这条曲线接下来会跌到的
+    // 最小值会不会跌破 0。永远计算（开销很小），只在 hasElement(si,"intransit") 时才展示。
+    let troughInv = inv[0], troughDay = 0;
+    for (let d = 1; d <= HORIZON; d++) { if (inv[d] < troughInv) { troughInv = inv[d]; troughDay = d; } }
+    return { inv, ordered: hasLead, orderDay, arrivalDay, lostSales, stockoutDays, sellOutDay, suggestedQty, soldQty, troughInv, troughDay };
   }
 
   // v0.14：安全库存天数不再驱动结果，只是一条「参考建议下单日」，供玩家跟自己拖的
@@ -349,8 +392,9 @@
     const hasLead = hasElement(stageIndex, "leadTime");
     const hasPromo = hasElement(stageIndex, "promo");
     const hasForecastDriven = hasElement(stageIndex, "forecast");
+    const hasTransit = hasElement(stageIndex, "intransit");
 
-    const sim = simulate(p, hasLead, hasPromo, hasForecastDriven, true);
+    const sim = simulate(p, hasLead, hasPromo, hasForecastDriven, true, hasTransit);
     const forecastDaily = hasForecastDriven ? p.forecast : p.demand;
     const refOrderDay = computeSafetyRefDay(p, forecastDaily, stageIndex);
 
@@ -372,6 +416,8 @@
         sellOutDay: sim.sellOutDay,
         orderDay: sim.orderDay,
         arrivalDay: sim.arrivalDay,
+        troughInv: sim.troughInv,
+        troughDay: sim.troughDay,
         refOrderDay,
         stockoutDays: sim.stockoutDays,
         lostSales: sim.lostSales,
@@ -552,6 +598,10 @@
     if (els.has("leadTime") && m.arrivalDay >= 0 && replenishQty > 0) {
       items.push({ key: "arrival", day: m.arrivalDay, label: "到货 +" + fmt(replenishQty), color: "--green" });
     }
+    // v0.19：在途到货——已经定死 ETA 的一批货，跟上面「自己下单」的到货事件颜色区分（蓝 vs 绿）。
+    if (els.has("intransit") && p.transitQty > 0) {
+      items.push({ key: "transitArrival", day: p.transitEta, label: "在途到货 +" + fmt(p.transitQty), color: "--blue" });
+    }
     if (els.has("promo") && p.promo > 1) {
       items.push({ key: "promoStart", day: p.promoDay, label: "促销 第" + (p.promoDay + 1) + "天", color: "--amber" });
     }
@@ -722,6 +772,25 @@
       pendingLabels.push({ text: "🏚 压仓 " + fmt(m.endInv) + " 件", x: x(HORIZON) - boxW - 6, y: clampLabelY(by + 12, padT, labelMaxY, zeroY, false), align: "right", font: "bold 11px sans-serif", color: "--ink", fixed: overstockBlockH >= 20 });
     }
 
+    // v0.19：在途库存关起——① 已经定死 ETA 的那批货到货，画一个蓝色台阶圆点（颜色跟自己
+    // 下的单/leadTime 关的绿箭头刻意区分：一个是「已经定死改不了」，一个是「你现在能决定」）；
+    // ② 「谷底」这条水平虚线——曲线全程最低点，安全与否看它会不会跌到 0（inv 全程 clamp 到 0，
+    // 不会变负数，跌到 0 = 那天已经断货）。
+    if (els.has("intransit")) {
+      if (p.transitQty > 0 && p.transitEta <= progDay) {
+        drawNodeDot(ctx, x(p.transitEta), y(inv[Math.min(p.transitEta, progDay)]), cssVar("--blue"));
+      }
+      const troughColor = m.troughInv <= 0 ? "--red" : "--blue";
+      const ty = y(m.troughInv);
+      ctx.strokeStyle = cssVar(troughColor); ctx.setLineDash([5, 3]); ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(padL, ty); ctx.lineTo(padL + plotW, ty); ctx.stroke();
+      ctx.setLineDash([]);
+      const troughText = m.troughInv <= 0
+        ? "🔻 谷底 = 0（第" + (m.troughDay + 1) + "天断货）"
+        : "🔻 谷底 " + fmt(m.troughInv) + " 件（第" + (m.troughDay + 1) + "天）";
+      pendingLabels.push({ text: troughText, x: padL + 6, y: clampLabelY(ty - 6, padT, labelMaxY, zeroY, hasBottomBand), align: "left", font: "11px sans-serif", color: troughColor });
+    }
+
     // 斜线中点 + 终点 教学标签（日销关，让"日销 = 斜率"一眼可见，只在这一关出现一次）
     if (si === stageIndexOf("demand") && progDay > 10 && p.demand > 0) {
       const sellout = Math.floor(p.inventory / p.demand);
@@ -885,6 +954,15 @@
         action: m.stockoutDays > 0 ? "看看到货前有没有留下一段缺货带——那是没接上的部分。" : "补货接上了，库存没有断过。"
       });
     }
+    if (hasElement(si, "intransit") && p.transitQty > 0) {
+      events.push({
+        day: p.transitEta,
+        headline: "在途到货：第 " + (p.transitEta + 1) + " 天到 " + fmt(p.transitQty) + " 件",
+        what: "这批货是你之前已经下的单，今天已经没法改——只能等它到。",
+        why: "在途到货日（ETA）已经定死，不受你今天任何决策影响。",
+        action: "看它到货之后，谷底会不会撑住——把它拖到 0 看看没有这批货会怎样。"
+      });
+    }
     if (hasElement(si, "promo") && p.promo > 1) {
       events.push({
         day: p.promoDay,
@@ -942,6 +1020,11 @@
     if (hasElement(si, "sellout")) rows.push(["售罄日", selloutMoment(si, m) < 0 ? "不会售罄" : selloutDayLabel(si, m)]);
     if (hasElement(si, "sellout")) rows.push(["缺货情况", m.stockoutDays > 0 ? badge(m.stockoutDays + " 天 · 少卖 " + fmt(m.lostSales) + " 件", "bad") : "0 天"]);
     if (hasElement(si, "leadTime")) rows.push(["下单日 / 到货日", (m.orderDay >= 0 ? "第 " + (m.orderDay + 1) + " 天" : "—") + " / " + (m.arrivalDay >= 0 ? "第 " + (m.arrivalDay + 1) + " 天" : "—")]);
+    if (hasElement(si, "intransit")) {
+      rows.push(["未来最低点（谷底）", m.troughInv <= 0
+        ? badge("第 " + (m.troughDay + 1) + " 天 · 0 件（会断货）", "bad")
+        : "第 " + (m.troughDay + 1) + " 天 · " + fmt(m.troughInv) + " 件"]);
+    }
     if (hasElement(si, "safety")) {
       const delta = m.orderDay - m.refOrderDay;
       const deltaNote = m.refOrderDay < 0 ? "" : delta === 0 ? "（刚好卡点）" : delta > 0 ? "（你晚了 " + delta + " 天）" : "（你早了 " + (-delta) + " 天）";
@@ -1178,6 +1261,20 @@
       why: "箭头指向「到货那一刻」在时间轴的位置 = 你选的下单日 + 提前期（物流方式决定）",
       biz: "货从下单到可售要等提前期，等太久就先断货",
       when: (p, m, si) => hasElement(si, "leadTime") && m.arrivalDay >= 0
+    },
+    {
+      icon: "📦", color: "--blue", name: "在途到货（蓝）",
+      where: "顶部一个蓝色事件标记「在途到货 +N」+ 曲线在那天抬升的一个台阶",
+      why: "这批货早就下单在路上了——ETA 已经定死，你今天改不了它什么时候到，但必须把它算进供给里",
+      biz: "跟你自己现在下的单不是一回事：那是未来能决定的，这批是过去已经决定、马上要生效的",
+      when: (p, m, si) => hasElement(si, "intransit") && p.transitQty > 0
+    },
+    {
+      icon: "╌", color: "--blue", name: "谷底虚线（未来最低点）",
+      where: "一条水平的蓝色（跌到 0 会变红）虚线 + 「谷底 N 件」标签，贴着曲线全程最低的那一天",
+      why: "安全与否不是看「现在有多少」，是看这条曲线接下来会跌到的最低点会不会跌到 0——从看一个数字，变成看一整条曲线的最小值",
+      biz: "谷底 > 0 才是真安全；谷底 = 0 说明中间某天会断货，哪怕「现在」看着库存还不少",
+      when: (p, m, si) => hasElement(si, "intransit")
     },
     {
       icon: "▏", color: "--amber", name: "参考建议虚线",
